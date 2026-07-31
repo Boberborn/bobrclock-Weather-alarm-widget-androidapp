@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     private lateinit var weatherInterval: SeekBar
     private lateinit var weatherIntervalLabel: TextView
     private lateinit var permissionStatus: TextView
+    private lateinit var widgetShowAlarms: Switch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,7 +190,7 @@ class MainActivity : Activity() {
         locationInput = AutoCompleteTextView(this).apply {
             hint = getString(R.string.location_name)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-            threshold = 2
+            threshold = Int.MAX_VALUE
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -201,8 +202,11 @@ class MainActivity : Activity() {
                 val result = citySuggestions.getOrNull(position) ?: return@setOnItemClickListener
                 suppressAutocomplete = true
                 setText(cityLabel(result))
-                suppressAutocomplete = false
                 postcodeInput.setText(result.optString("postcode"))
+            }
+            setOnClickListener {
+                suppressAutocomplete = false
+                fetchCitySuggestions(text.toString())
             }
         }
         postcodeInput = input(getString(R.string.postcode), false)
@@ -245,6 +249,18 @@ class MainActivity : Activity() {
         root.addView(body(getString(R.string.weather_note)))
         root.addView(title(getString(R.string.widget_section), 20f))
         root.addView(body(getString(R.string.widget_instructions)))
+        widgetShowAlarms = Switch(this).apply {
+            text = getString(R.string.widget_show_alarms)
+            isChecked = Prefs.values(this@MainActivity)
+                .getBoolean(Prefs.WIDGET_SHOW_ALARMS, true)
+            setOnCheckedChangeListener { _, checked ->
+                Prefs.values(this@MainActivity).edit()
+                    .putBoolean(Prefs.WIDGET_SHOW_ALARMS, checked)
+                    .apply()
+                ClockWeatherWidget.updateAll(this@MainActivity)
+            }
+        }
+        root.addView(widgetShowAlarms)
 
         return ScrollView(this).apply { addView(root) }
     }
@@ -583,10 +599,11 @@ class MainActivity : Activity() {
     }
 
     private fun fetchCitySuggestions(query: String) {
-        if (query.length < 2) return
+        if (query.length < 2 || suppressAutocomplete) return
         Thread {
             val results = geocode(query, 5)
             runOnUiThread {
+                if (suppressAutocomplete) return@runOnUiThread
                 citySuggestions = results ?: emptyList()
                 val adapter = ArrayAdapter(
                     this,

@@ -19,6 +19,7 @@ object Prefs {
     const val WEATHER_CODE = "weather_code"
     const val WEATHER_UPDATED = "weather_updated"
     const val WEATHER_INTERVAL_MINUTES = "weather_interval_minutes"
+    const val WIDGET_SHOW_ALARMS = "widget_show_alarms"
 
     fun values(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 }

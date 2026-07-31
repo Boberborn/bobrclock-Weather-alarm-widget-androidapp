@@ -16,9 +16,27 @@ class ClockWeatherWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        appWidgetIds.forEach { appWidgetManager.updateAppWidget(it, render(context)) }
+        appWidgetIds.forEach {
+            appWidgetManager.updateAppWidget(
+                it,
+                render(context, options(appWidgetManager, it)),
+            )
+        }
         WeatherScheduler.ensureScheduled(context)
         WeatherScheduler.refreshNow(context)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            render(context, options(appWidgetManager, appWidgetId)),
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -35,48 +53,59 @@ class ClockWeatherWidget : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, ClockWeatherWidget::class.java)
             manager.getAppWidgetIds(component).forEach {
-                manager.updateAppWidget(it, render(context))
+                manager.updateAppWidget(
+                    it,
+                    render(context, options(manager, it)),
+                )
             }
         }
 
-        private fun render(context: Context): RemoteViews {
+        private data class WidgetOptions(val small: Boolean, val showHourly: Boolean)
+
+        private fun options(manager: AppWidgetManager, widgetId: Int): WidgetOptions {
+            val options = manager.getAppWidgetOptions(widgetId)
+            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            android.util.Log.d("WidgetSize", "id=$widgetId minWidth=$minWidth minHeight=$minHeight")
+            return WidgetOptions(
+                small = minWidth in 1..250,
+                showHourly = minHeight >= 40,
+            )
+        }
+
+        private fun render(context: Context, opts: WidgetOptions): RemoteViews {
+            val small = opts.small
+            val showHourly = opts.showHourly
             val prefs = Prefs.values(context)
             val location = prefs.getString(Prefs.LOCATION_NAME, null)
                 ?: context.getString(R.string.set_location)
             val temperature = prefs.getString(Prefs.WEATHER_TEMP, null)
             val weatherCode = prefs.getInt(Prefs.WEATHER_CODE, -1)
-            val updatedAt = prefs.getLong(Prefs.WEATHER_UPDATED, 0L)
-            val nextAlarm = AlarmStore.nextEnabled(context)?.first
+            val alarms = AlarmStore.load(context).take(3)
+            val layout = if (small) {
+                R.layout.widget_clock_weather_small
+            } else {
+                R.layout.widget_clock_weather
+            }
 
-            return RemoteViews(context.packageName, R.layout.widget_clock_weather).apply {
-                setTextViewText(R.id.weather_location, location)
+            return RemoteViews(context.packageName, layout).apply {
+                setTextViewText(R.id.weather_location, location.substringBefore(",").trim())
                 setTextViewText(
                     R.id.weather_temperature,
                     temperature?.let { "$it°" } ?: context.getString(R.string.weather_waiting),
                 )
                 setTextViewText(R.id.weather_condition, weatherDescription(weatherCode))
-                setTextViewText(
-                    R.id.weather_updated,
-                    if (updatedAt == 0L) {
-                        context.getString(R.string.tap_refresh)
-                    } else {
-                        DateUtils.getRelativeTimeSpanString(
-                            updatedAt,
-                            System.currentTimeMillis(),
-                            DateUtils.MINUTE_IN_MILLIS,
-                        ).toString()
-                    },
-                )
+                val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && !small
+                val alarmVisibility = if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE
+                setViewVisibility(R.id.alarm_label, alarmVisibility)
+                setViewVisibility(R.id.alarm_status, alarmVisibility)
+                setTextViewText(R.id.alarm_label, context.getString(R.string.alarm_widget_time))
                 setTextViewText(
                     R.id.alarm_status,
-                    if (nextAlarm != null) {
-                        context.getString(
-                            R.string.alarm_widget_time,
-                            nextAlarm.hour,
-                            nextAlarm.minute,
-                        )
-                    } else {
+                    if (alarms.isEmpty()) {
                         context.getString(R.string.alarm_widget_off)
+                    } else {
+                        alarms.joinToString("\n") { String.format("%02d:%02d", it.hour, it.minute) }
                     },
                 )
 
@@ -86,16 +115,9 @@ class ClockWeatherWidget : AppWidgetProvider() {
                     Intent(context, MainActivity::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
-                val refresh = PendingIntent.getBroadcast(
-                    context,
-                    6102,
-                    Intent(context, ClockWeatherWidget::class.java).setAction(ACTION_REFRESH),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
                 setOnClickPendingIntent(R.id.widget_root, open)
-                setOnClickPendingIntent(R.id.refresh_button, refresh)
 
-                renderHourly(this, context, prefs)
+                if (showHourly) renderHourly(this, context, prefs)
             }
         }
 

@@ -53,7 +53,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 ## After any code change
 1. Build: `./gradlew.bat assembleDebug`
 2. Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk`
-3. Git: `git add -A && git commit -m "message" && git push`
+3. **Do NOT commit or push** — only push when the user explicitly says to push to GitHub.
 
 ## Ponytail rules (always follow)
 - No abstractions not requested. No new dependencies. Deletion over addition.

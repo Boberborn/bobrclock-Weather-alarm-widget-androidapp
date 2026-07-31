@@ -65,10 +65,11 @@
     <string name="weather_saved">Location saved. Weather will refresh shortly.</string>
     <string name="widget_section">Home-screen widget</string>
     <string name="widget_instructions">Long-press an empty area on the home screen, choose Widgets, then add Bobr Clock.</string>
+    <string name="widget_show_alarms">Show alarms in widget</string>
     <string name="weather_waiting">--°</string>
     <string name="tap_refresh">Tap ↻</string>
     <string name="refresh_weather">Refresh weather</string>
-    <string name="alarm_widget_time">Next %1$02d:%2$02d</string>
+    <string name="alarm_widget_time">Alarm</string>
     <string name="alarm_widget_off">No alarm</string>
     <string name="widget_description">Clock, date, current weather, and alarm status</string>
     <string name="your_location">Your location</string>
