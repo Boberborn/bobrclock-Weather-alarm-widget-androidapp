@@ -43,6 +43,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -79,6 +81,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -672,8 +676,7 @@ private fun requestIgnoreBatteryOptimizations(context: Context) {
         return
     }
     context.startActivity(
-        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            .setData(Uri.parse("package:${context.packageName}")),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
     )
 }
 
@@ -746,13 +749,51 @@ private fun doGpsLocation(context: Context) {
         toast(context, "Location not found. Enable GPS and try again.")
         return
     }
+    val city = try {
+        val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+        val addresses = geocoder.getFromLocation(coords.first.toDouble(), coords.second.toDouble(), 1)
+        addresses?.firstOrNull()?.let { addr ->
+            addr.locality ?: addr.subAdminArea ?: addr.adminArea ?: addr.featureName
+        }
+    } catch (_: Exception) { null }
+        ?: fetchCityFromNominatim(coords.first.toDouble(), coords.second.toDouble())
+    val label = city ?: "Your location"
     Prefs.values(context).edit()
-        .putString(Prefs.LOCATION_NAME, "Your location")
+        .putString(Prefs.LOCATION_NAME, label)
         .remove(Prefs.POSTCODE)
         .putString(Prefs.LATITUDE, coords.first)
         .putString(Prefs.LONGITUDE, coords.second)
         .apply()
-    toast(context, "Weather location set to GPS")
+    toast(context, "Weather location set to $label")
+}
+
+private fun fetchCityFromNominatim(lat: Double, lon: Double): String? {
+    return try {
+        val url = URL(
+            "https://nominatim.openstreetmap.org/reverse" +
+                "?format=json&lat=$lat&lon=$lon&zoom=10&language=en",
+        )
+        val conn = url.openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        conn.setRequestProperty("User-Agent", "BobrClockWeatherAlarm/1.0")
+        if (conn.responseCode !in 200..299) return null
+        val body = conn.inputStream.bufferedReader().use { it.readText() }
+        conn.disconnect()
+        val json = JSONObject(body)
+        val address = json.optJSONObject("address")
+        address?.let {
+            it.optString("city").ifBlank {
+                it.optString("town").ifBlank {
+                    it.optString("village").ifBlank {
+                        it.optString("municipality").ifBlank {
+                            it.optString("county")
+                        }
+                    }
+                }
+            }
+        }?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) { null }
 }
 
 private fun displayName(context: Context, uri: Uri): String? {
@@ -3072,7 +3113,6 @@ private fun MoreTabContent(
     var locationQuery by remember {
         mutableStateOf(prefs.getString(Prefs.LOCATION_NAME, "") ?: "")
     }
-    var savingLocation by remember { mutableStateOf(false) }
     var widgetShowAlarms by remember {
         mutableStateOf(prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true))
     }
@@ -3145,41 +3185,58 @@ private fun MoreTabContent(
                 fontFamily = FontFamily.Cursive,
             )
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = locationQuery,
-                onValueChange = { locationQuery = it },
-                label = { Text("City") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            var suggestions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+            var showDropdown by remember { mutableStateOf(false) }
+            val cityFieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+
+            LaunchedEffect(locationQuery) {
+                val q = locationQuery.trim()
+                if (q.length < 2) { suggestions = emptyList(); showDropdown = false; return@LaunchedEffect }
+                delay(400)
+                suggestions = withContext(Dispatchers.IO) {
+                    geocode(q, 3) ?: emptyList()
+                }
+                showDropdown = suggestions.isNotEmpty()
+            }
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = locationQuery,
+                    onValueChange = { locationQuery = it; showDropdown = true },
+                    label = { Text("City") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(cityFieldFocus),
+                )
+                DropdownMenu(
+                    expanded = showDropdown && suggestions.isNotEmpty(),
+                    onDismissRequest = { showDropdown = false },
+                    modifier = Modifier.fillMaxWidth(0.92f),
+                ) {
+                    suggestions.forEach { s ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(cityLabel(s), fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                                    val country = s.optString("country_code", "")
+                                    val admin = s.optString("admin1", "")
+                                    if (country.isNotBlank()) Text("$admin, $country", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                                }
+                            },
+                            onClick = {
+                                locationQuery = cityLabel(s)
+                                applyLocation(context, s)
+                                reloadWeather()
+                                showDropdown = false
+                                suggestions = emptyList()
+                            },
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        if (savingLocation) return@Button
-                        savingLocation = true
-                        scope.launch {
-                            val query = locationQuery.trim().substringBefore(",")
-                            val result = if (query.length < 2) null else {
-                                withContext(Dispatchers.IO) { geocode(query, 1)?.firstOrNull() }
-                            }
-                            savingLocation = false
-                            if (result == null) {
-                                toast(context, "Location not found. Try a city name.")
-                            } else {
-                                applyLocation(context, result)
-                                locationQuery = cityLabel(result)
-                                reloadWeather()
-                            }
-                        }
-                    },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = OlivePrimary,
-                        contentColor = PaperWarmTint,
-                    ),
-                ) {
-                    Text("Save location", fontFamily = FontFamily.Cursive)
-                }
                 Button(
                     onClick = {
                         val activity = context as? android.app.Activity
