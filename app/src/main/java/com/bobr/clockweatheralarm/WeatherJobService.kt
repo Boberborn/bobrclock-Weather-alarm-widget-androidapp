@@ -34,7 +34,9 @@ class WeatherJobService : JobService() {
         val endpoint = URL(
             "https://api.open-meteo.com/v1/forecast" +
                 "?latitude=$latitude&longitude=$longitude" +
-                "&current=temperature_2m,weather_code" +
+                "&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m" +
+                "&wind_speed_unit=mph" +
+                "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=6" +
                 "&hourly=temperature_2m&forecast_hours=7&timezone=auto",
         )
         val connection = endpoint.openConnection() as HttpURLConnection
@@ -56,9 +58,36 @@ class WeatherJobService : JobService() {
                     .append(";")
                     .append(temps.getDouble(i).toInt())
             }
+            val daily = json.optJSONObject("daily")
+            val dailyOut = StringBuilder()
+            if (daily != null) {
+                val dTimes = daily.getJSONArray("time")
+                val dCodes = daily.getJSONArray("weather_code")
+                val dMax = daily.getJSONArray("temperature_2m_max")
+                val dMin = daily.getJSONArray("temperature_2m_min")
+                for (i in 0 until dTimes.length()) {
+                    if (dailyOut.isNotEmpty()) dailyOut.append("|")
+                    dailyOut.append(dTimes.getString(i))
+                        .append(";")
+                        .append(dCodes.getInt(i))
+                        .append(";")
+                        .append(dMax.getDouble(i).toInt())
+                        .append(";")
+                        .append(dMin.getDouble(i).toInt())
+                }
+            }
             prefs.edit()
                 .putString(Prefs.WEATHER_TEMP, current.getDouble("temperature_2m").toInt().toString())
                 .putInt(Prefs.WEATHER_CODE, current.getInt("weather_code"))
+                .putInt(
+                    Prefs.WEATHER_WIND,
+                    current.optDouble("wind_speed_10m", -1.0).toInt(),
+                )
+                .putInt(
+                    Prefs.WEATHER_WIND_DIR,
+                    current.optInt("wind_direction_10m", -1),
+                )
+                .putString(Prefs.WEATHER_DAILY, dailyOut.toString())
                 .putLong(Prefs.WEATHER_UPDATED, System.currentTimeMillis())
                 .putString(Prefs.WEATHER_HOURLY, hourlyOut.toString())
                 .apply()

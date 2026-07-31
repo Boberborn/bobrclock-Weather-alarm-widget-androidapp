@@ -94,7 +94,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
                     R.id.weather_temperature,
                     temperature?.let { "$it°" } ?: context.getString(R.string.weather_waiting),
                 )
-                setTextViewText(R.id.weather_condition, weatherDescription(weatherCode))
+                setTextViewText(R.id.weather_condition, conditionText(weatherCode))
                 val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && !small
                 val alarmVisibility = if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE
                 setViewVisibility(R.id.alarm_label, alarmVisibility)
@@ -135,15 +135,53 @@ class ClockWeatherWidget : AppWidgetProvider() {
             }
         }
 
-        private fun weatherDescription(code: Int): String = when (code) {
-            0 -> "Clear"
-            1, 2 -> "Partly cloudy"
-            3 -> "Cloudy"
-            45, 48 -> "Fog"
-            51, 53, 55, 56, 57 -> "Drizzle"
-            61, 63, 65, 66, 67, 80, 81, 82 -> "Rain"
-            71, 73, 75, 77, 85, 86 -> "Snow"
-            95, 96, 99 -> "Thunderstorm"
+        private fun conditionText(code: Int): String = when (code) {
+            0 -> "Clear sky"
+            1 -> "Mainly clear"
+            2 -> "Partly cloudy"
+            3 -> "Overcast"
+            45, 48 -> "Foggy"
+            51 -> "Light drizzle"
+            53 -> "Drizzle"
+            55 -> "Heavy drizzle"
+            56, 57 -> "Freezing drizzle"
+            61 -> "Light rain"
+            63 -> "Rain"
+            65 -> "Heavy rain"
+            66, 67 -> "Freezing rain"
+            71 -> "Light snow"
+            73 -> "Snow"
+            75 -> "Heavy snow"
+            77 -> "Snow grains"
+            80 -> "Light showers"
+            81 -> "Showers"
+            82 -> "Heavy showers"
+            85 -> "Snow showers"
+            86 -> "Heavy snow showers"
+            95 -> "Thunderstorm"
+            96 -> "Thunderstorm, hail"
+            99 -> "Severe thunderstorm"
+            else -> "Weather"
+        }
+
+        @Suppress("unused")
+        private fun weatherIcon(code: Int): String = when (code) {
+            0, 1 -> "Joyful"
+            2 -> "Content"
+            3 -> "Neutral"
+            45, 48 -> "Dreamy"
+            51, 53, 55 -> "Tearful"
+            56, 57, 66 -> "Chill"
+            61, 63, 80, 81 -> "Calm"
+            65 -> "Pissed"
+            67 -> "Furious"
+            71, 73, 77, 85 -> "Frosty"
+            75 -> "Icy rage"
+            82 -> "Enraged"
+            86 -> "Blizzard wrath"
+            95 -> "Annoyed"
+            96 -> "Mad"
+            99 -> "Apocalyptic"
             else -> "Weather"
         }
     }

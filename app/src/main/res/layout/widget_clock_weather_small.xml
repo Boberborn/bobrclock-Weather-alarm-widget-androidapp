@@ -50,7 +50,7 @@
                 android:format12Hour="EEE, dd.MM"
                 android:format24Hour="EEE, dd.MM"
                 android:textColor="#FFD1D5DB"
-                android:textSize="14sp" />
+                android:textSize="12sp" />
 
             <TextClock
                 android:id="@+id/widget_time"
@@ -60,7 +60,7 @@
                 android:format24Hour="HH:mm"
                 android:includeFontPadding="false"
                 android:textColor="#FFFFFFFF"
-                android:textSize="40sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
