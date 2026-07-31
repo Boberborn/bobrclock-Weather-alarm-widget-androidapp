@@ -47,7 +47,7 @@ object AlarmScheduler {
         val showIntent = PendingIntent.getActivity(
             context,
             REQUEST_SHOW_BASE + alarm.id,
-            Intent(context, MainActivity::class.java),
+            Intent(context, InstructionActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 

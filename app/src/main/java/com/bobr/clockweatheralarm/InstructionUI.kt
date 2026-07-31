@@ -82,6 +82,30 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import android.Manifest
+import android.app.Activity
+import android.app.NotificationManager
+import android.content.pm.PackageManager
+import android.database.Cursor
+import android.os.PowerManager
+import android.provider.OpenableColumns
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -268,9 +292,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                 ) {
                     TopControls(
                         onMenu = { selectedTab = InstructionTab.More },
-                        onSettings = {
-                            context.startActivity(Intent(context, MainActivity::class.java))
-                        },
+                        onSettings = { selectedTab = InstructionTab.More },
                     )
                     when (selectedTab) {
                         InstructionTab.Clock -> {
@@ -380,8 +402,9 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     WeatherScheduler.refreshNow(context)
                                     toast(context, "Refreshing weather…")
                                 },
-                                onOpenMainSettings = {
-                                    context.startActivity(Intent(context, MainActivity::class.java))
+                                onWeatherStateReload = {
+                                    weather = loadWeatherUi(context)
+                                    forecast = loadForecastUi(context)
                                 },
                             )
                         }
@@ -406,6 +429,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                     }
                 },
                 onSave = { alarm -> scheduleSaved(alarm); alarmEditorVisible = false },
+                onTest = { alarm ->
+                    AlarmScheduler.scheduleTest(context, alarm.soundUri, alarm.soundName)
+                    toast(context, "Test alarm in 10 s")
+                },
             )
         }
     }
@@ -426,6 +453,151 @@ private fun ensureExactAlarmPermission(context: Context): Boolean {
 
 private fun toast(context: Context, message: String) {
     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+}
+
+private fun formatInterval(minutes: Int): String {
+    if (minutes < 60) return "$minutes min"
+    val hours = minutes / 60
+    val remainder = minutes % 60
+    return if (remainder == 0) "$hours h" else "$hours h $remainder min"
+}
+
+private fun yesNo(value: Boolean) = if (value) "Yes" else "No"
+
+private fun permissionStatus(context: Context): String {
+    val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    val notifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+    val fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+        context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+    val battery = context.getSystemService(PowerManager::class.java)
+        .isIgnoringBatteryOptimizations(context.packageName)
+    return "Exact alarms: ${yesNo(exact)} · Notifications: ${yesNo(notifications)}\n" +
+        "Full-screen alerts: ${yesNo(fullScreen)} · Battery: ${yesNo(battery)}"
+}
+
+private fun openAlarmPermissions(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        ensureExactAlarmPermission(context)
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (!manager.canUseFullScreenIntent()) {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:${context.packageName}"),
+                ),
+            )
+        }
+    }
+}
+
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    if (context.getSystemService(PowerManager::class.java)
+            .isIgnoringBatteryOptimizations(context.packageName)
+    ) {
+        toast(context, "Battery optimization is already off")
+        return
+    }
+    context.startActivity(
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:${context.packageName}")),
+    )
+}
+
+private fun requestNotificationPermission(context: Context) {
+    val activity = context as? Activity ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7001)
+    } else {
+        toast(context, "Notifications permission already granted")
+    }
+}
+
+private fun geocode(query: String, count: Int): List<JSONObject>? {
+    val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
+    val endpoint = URL(
+        "https://geocoding-api.open-meteo.com/v1/search" +
+            "?name=$encoded&count=$count&language=en&format=json",
+    )
+    val connection = endpoint.openConnection() as HttpURLConnection
+    return try {
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 10_000
+        connection.setRequestProperty("User-Agent", "BobrClockWeatherAlarm/1.0")
+        if (connection.responseCode !in 200..299) return null
+        val body = connection.inputStream.bufferedReader().use { it.readText() }
+        val results = JSONObject(body).optJSONArray("results") ?: return null
+        buildList {
+            for (i in 0 until results.length()) {
+                add(results.getJSONObject(i))
+            }
+        }
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private fun cityLabel(result: JSONObject): String {
+    val name = result.getString("name")
+    val country = result.optString("country")
+    return if (country.isBlank()) name else getLocationWithCountry(name, country)
+}
+
+private fun getLocationWithCountry(name: String, country: String): String = "$name, $country"
+
+private fun applyLocation(context: Context, result: JSONObject) {
+    val lat = result.getDouble("latitude").toString()
+    val lon = result.getDouble("longitude").toString()
+    val postcode = result.optString("postcode").ifBlank { null }
+    Prefs.values(context).edit()
+        .putString(Prefs.LOCATION_NAME, cityLabel(result))
+        .putString(Prefs.POSTCODE, postcode ?: "")
+        .putString(Prefs.LATITUDE, lat)
+        .putString(Prefs.LONGITUDE, lon)
+        .apply()
+    toast(context, "Location saved")
+}
+
+private fun useGpsLocation(context: Context) {
+    val coords = WeatherJobService.lastKnownLocation(context)
+    if (coords == null) {
+        toast(context, "Location not found. Enable GPS and try again.")
+        return
+    }
+    Prefs.values(context).edit()
+        .putString(Prefs.LOCATION_NAME, "Your location")
+        .remove(Prefs.POSTCODE)
+        .putString(Prefs.LATITUDE, coords.first)
+        .putString(Prefs.LONGITUDE, coords.second)
+        .apply()
+    toast(context, "Weather location set to GPS")
+}
+
+private fun displayName(context: Context, uri: Uri): String? {
+    var cursor: Cursor? = null
+    return try {
+        cursor = context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )
+        if (cursor?.moveToFirst() == true) cursor.getString(0) else null
+    } catch (_: Exception) {
+        null
+    } finally {
+        cursor?.close()
+    }
 }
 
 private fun loadWeatherUi(context: Context): WeatherUiModel {
@@ -1805,8 +1977,40 @@ private fun DrawScope.drawStar(x: Float, y: Float, r: Float) {
 private fun MoreTabContent(
     context: Context,
     onRefreshNow: () -> Unit,
-    onOpenMainSettings: () -> Unit,
+    onWeatherStateReload: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
+    val prefs = remember(context) { Prefs.values(context) }
+
+    @Suppress("DEPRECATION")
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var statusTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) statusTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionStatusText = remember(statusTick) { permissionStatus(context) }
+
+    var locationQuery by remember {
+        mutableStateOf(prefs.getString(Prefs.LOCATION_NAME, "") ?: "")
+    }
+    var postcodeQuery by remember {
+        mutableStateOf(prefs.getString(Prefs.POSTCODE, "") ?: "")
+    }
+    var savingLocation by remember { mutableStateOf(false) }
+    var interval by remember { mutableStateOf(WeatherScheduler.intervalMinutes(context)) }
+    var widgetShowAlarms by remember {
+        mutableStateOf(prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true))
+    }
+
+    fun reloadWeather() {
+        onWeatherStateReload()
+        WeatherScheduler.refreshNow(context)
+    }
+
     Spacer(Modifier.height(8.dp))
     Text(
         text = "Settings",
@@ -1815,67 +2019,229 @@ private fun MoreTabContent(
         fontFamily = FontFamily.Cursive,
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
     )
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        content = {
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    text = "Refresh weather now",
-                    fontSize = 17.sp,
-                    color = TextBrown,
-                    fontFamily = FontFamily.Cursive,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Fetches the current conditions and the 6-day forecast.",
-                    fontSize = 14.sp,
-                    color = TextMuted,
-                    fontFamily = FontFamily.Cursive,
-                )
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = onRefreshNow,
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = OlivePrimary,
-                        contentColor = PaperWarmTint,
-                    ),
-                ) {
-                    Text("Refresh", fontFamily = FontFamily.Cursive)
-                }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Refresh weather now",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Fetches the current conditions and the 6-day forecast.",
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onRefreshNow,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = OlivePrimary,
+                    contentColor = PaperWarmTint,
+                ),
+            ) {
+                Text("Refresh", fontFamily = FontFamily.Cursive)
             }
-        },
-    )
+        }
+    }
     Spacer(Modifier.height(10.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        content = {
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    text = "Alarm & widget settings",
-                    fontSize = 17.sp,
-                    color = TextBrown,
-                    fontFamily = FontFamily.Cursive,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Sound, permissions, location, and widget options live in the classic settings.",
-                    fontSize = 14.sp,
-                    color = TextMuted,
-                    fontFamily = FontFamily.Cursive,
-                )
-                Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Weather location",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "City or postcode used for the forecast.",
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = locationQuery,
+                onValueChange = { locationQuery = it },
+                label = { Text("City") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = postcodeQuery,
+                onValueChange = { postcodeQuery = it },
+                label = { Text("Postcode") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = onOpenMainSettings,
+                    onClick = {
+                        if (savingLocation) return@Button
+                        savingLocation = true
+                        scope.launch {
+                            val query = postcodeQuery.trim()
+                                .ifBlank { locationQuery.trim().substringBefore(",") }
+                            val result = if (query.length < 2) null else {
+                                withContext(Dispatchers.IO) { geocode(query, 1)?.firstOrNull() }
+                            }
+                            savingLocation = false
+                            if (result == null) {
+                                toast(context, "Location not found. Try a city name or postcode.")
+                            } else {
+                                applyLocation(context, result)
+                                locationQuery = cityLabel(result)
+                                postcodeQuery = prefs.getString(Prefs.POSTCODE, "") ?: ""
+                                reloadWeather()
+                            }
+                        }
+                    },
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                         containerColor = OlivePrimary,
                         contentColor = PaperWarmTint,
                     ),
                 ) {
-                    Text("Open settings", fontFamily = FontFamily.Cursive)
+                    Text("Save location", fontFamily = FontFamily.Cursive)
+                }
+                Button(
+                    onClick = {
+                        useGpsLocation(context)
+                        locationQuery = prefs.getString(Prefs.LOCATION_NAME, "") ?: ""
+                        postcodeQuery = prefs.getString(Prefs.POSTCODE, "") ?: ""
+                        reloadWeather()
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = OlivePrimary,
+                        contentColor = PaperWarmTint,
+                    ),
+                ) {
+                    Text("Use GPS", fontFamily = FontFamily.Cursive)
                 }
             }
-        },
-    )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Weather update interval",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "How often the app refreshes conditions in the background.",
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = formatInterval(interval),
+                fontSize = 16.sp,
+                color = OlivePrimary,
+                fontFamily = FontFamily.Cursive,
+            )
+            Slider(
+                value = interval.toFloat(),
+                onValueChange = { interval = it.roundToInt() },
+                valueRange = WeatherScheduler.MIN_INTERVAL_MINUTES.toFloat()..
+                    WeatherScheduler.MAX_INTERVAL_MINUTES.toFloat(),
+                steps = (WeatherScheduler.MAX_INTERVAL_MINUTES - WeatherScheduler.MIN_INTERVAL_MINUTES) / 10 - 1,
+                onValueChangeFinished = {
+                    val minutes = interval.coerceIn(
+                        WeatherScheduler.MIN_INTERVAL_MINUTES,
+                        WeatherScheduler.MAX_INTERVAL_MINUTES,
+                    ) / 10 * 10
+                    WeatherScheduler.updateInterval(context, minutes)
+                },
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Show alarms on widget",
+                        fontSize = 17.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "The home-screen widget lists your next alarms.",
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+                CustomSwitch(
+                    checked = widgetShowAlarms,
+                    onCheckedChange = { checked ->
+                        widgetShowAlarms = checked
+                        prefs.edit().putBoolean(Prefs.WIDGET_SHOW_ALARMS, checked).apply()
+                        ClockWeatherWidget.updateAll(context)
+                    },
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Permissions",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = permissionStatusText,
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = { openAlarmPermissions(context) },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = OlivePrimary,
+                    contentColor = PaperWarmTint,
+                ),
+            ) {
+                Text("Exact alarms & full-screen alerts", fontFamily = FontFamily.Cursive)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { requestNotificationPermission(context) },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = OlivePrimary,
+                    contentColor = PaperWarmTint,
+                ),
+            ) {
+                Text("Allow notifications", fontFamily = FontFamily.Cursive)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { requestIgnoreBatteryOptimizations(context) },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = OlivePrimary,
+                    contentColor = PaperWarmTint,
+                ),
+            ) {
+                Text("Disable battery optimization", fontFamily = FontFamily.Cursive)
+            }
+        }
+    }
 }
 
 @Composable
@@ -1904,6 +2270,7 @@ private fun AlarmEditorDialog(
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)?,
     onSave: (SavedAlarm) -> Unit,
+    onTest: (SavedAlarm) -> Unit,
 ) {
     val context = LocalContext.current
     val isNew = existing == null
@@ -1912,6 +2279,24 @@ private fun AlarmEditorDialog(
     val timeState = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
     var enabled by remember { mutableStateOf(existing?.enabled ?: true) }
     var daysMask by remember { mutableIntStateOf(existing?.daysMask ?: AlarmStore.ALL_DAYS) }
+    var soundUri by remember { mutableStateOf(existing?.soundUri) }
+    var soundName by remember { mutableStateOf(existing?.soundName ?: "Default alarm") }
+    val soundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            } catch (_: SecurityException) {
+                // The current read grant still permits playback while the app is running.
+            }
+            soundUri = uri.toString()
+            soundName = displayName(context, uri) ?: "Custom song"
+        }
+    }
     val dayOptions = listOf(
         "Mon" to Calendar.MONDAY,
         "Tue" to Calendar.TUESDAY,
@@ -1933,7 +2318,7 @@ private fun AlarmEditorDialog(
             )
         },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 TimePicker(
                     state = timeState,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -1991,11 +2376,48 @@ private fun AlarmEditorDialog(
                         }
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "Sound: $soundName",
+                    fontSize = 15.sp,
+                    color = TextBrown,
+                    fontFamily = FontFamily.Cursive,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { soundPicker.launch(arrayOf("audio/*")) }) {
+                        Text("Choose song", fontFamily = FontFamily.Cursive, color = OlivePrimary)
+                    }
+                    TextButton(onClick = {
+                        soundUri = null
+                        soundName = "Default alarm"
+                    }) {
+                        Text("Default", fontFamily = FontFamily.Cursive, color = TextMuted)
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
+            Row {
+                TextButton(
+                    onClick = {
+                        onTest(
+                            SavedAlarm(
+                                id = existing?.id ?: AlarmStore.nextId(context),
+                                hour = timeState.hour,
+                                minute = timeState.minute,
+                                enabled = enabled,
+                                daysMask = if (daysMask == 0) AlarmStore.ALL_DAYS else daysMask,
+                                soundUri = soundUri,
+                                soundName = soundName,
+                            ),
+                        )
+                    },
+                ) {
+                    Text("Test", fontFamily = FontFamily.Cursive, color = TextMuted)
+                }
+                TextButton(
+                    onClick = {
                     val days = if (daysMask == 0) AlarmStore.ALL_DAYS else daysMask
                     val saved = SavedAlarm(
                         id = existing?.id ?: AlarmStore.nextId(context),
@@ -2003,13 +2425,14 @@ private fun AlarmEditorDialog(
                         minute = timeState.minute,
                         enabled = enabled,
                         daysMask = days,
-                        soundUri = existing?.soundUri,
-                        soundName = existing?.soundName ?: "Default alarm",
+                        soundUri = soundUri,
+                        soundName = soundName,
                     )
                     onSave(saved)
                 },
             ) {
                 Text("Save", fontFamily = FontFamily.Cursive, color = OlivePrimary)
+            }
             }
         },
         dismissButton = {

@@ -112,7 +112,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
                 val open = PendingIntent.getActivity(
                     context,
                     6101,
-                    Intent(context, MainActivity::class.java),
+                    Intent(context, InstructionActivity::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
                 setOnClickPendingIntent(R.id.widget_root, open)

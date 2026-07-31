@@ -1,108 +1,113 @@
 package com.bobr.clockweatheralarm
 
-import android.app.Activity
 import android.content.Intent
-import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextClock
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
 
-class AlarmActivity : Activity() {
+class AlarmActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val soundUri = intent.getStringExtra(AlarmScheduler.EXTRA_SOUND_URI)
+        val soundName = intent.getStringExtra(AlarmScheduler.EXTRA_SOUND_NAME) ?: "Default alarm"
+        setContent {
+            AlarmRingScreen(
+                title = getString(R.string.alarm_ringing),
+                onSnooze = {
+                    if (AlarmScheduler.scheduleSnooze(this, soundUri, soundName)) {
+                        stopRinging()
+                    } else {
+                        Toast.makeText(this, R.string.exact_alarm_required, Toast.LENGTH_LONG).show()
+                    }
+                },
+                onStop = { stopRinging() },
             )
-        }
-
-        val padding = (24 * resources.displayMetrics.density).toInt()
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(padding, padding, padding, padding)
-            setBackgroundColor(Color.rgb(15, 23, 42))
-        }
-        layout.addView(TextView(this).apply {
-            text = getString(R.string.alarm_ringing)
-            textSize = 26f
-            setTextColor(Color.WHITE)
-        })
-        layout.addView(TextClock(this).apply {
-            format24Hour = "HH:mm"
-            format12Hour = "h:mm"
-            textSize = 72f
-            setTextColor(Color.WHITE)
-        })
-        layout.addView(Button(this).apply {
-            text = getString(R.string.snooze_five_minutes)
-            textSize = 22f
-            setPadding(40, 30, 40, 30)
-            setOnClickListener {
-                if (
-                    AlarmScheduler.scheduleSnooze(
-                        this@AlarmActivity,
-                        intent.getStringExtra(AlarmScheduler.EXTRA_SOUND_URI),
-                        intent.getStringExtra(AlarmScheduler.EXTRA_SOUND_NAME) ?: "Default alarm",
-                    )
-                ) {
-                    stopRinging()
-                } else {
-                    Toast.makeText(
-                        this@AlarmActivity,
-                        R.string.exact_alarm_required,
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }
-        })
-        layout.addView(Button(this).apply {
-            text = getString(R.string.stop_alarm)
-            textSize = 22f
-            setPadding(40, 30, 40, 30)
-            setOnClickListener { stopRinging() }
-        })
-        setContentView(layout)
-        hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.apply {
-                hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         }
     }
 
     private fun stopRinging() {
-        startService(
-            Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_STOP),
-        )
+        startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_STOP))
         finish()
+    }
+}
+
+@Composable
+private fun AlarmRingScreen(
+    title: String,
+    onSnooze: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val bg = Color(0xFF0F172A)
+    var now by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            now = LocalTime.now()
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bg)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = title,
+            fontSize = 26.sp,
+            color = Color.White,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = now.format(DateTimeFormatter.ofPattern("HH:mm")),
+            fontSize = 72.sp,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(40.dp))
+        Button(
+            onClick = onSnooze,
+            modifier = Modifier.height(56.dp).padding(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+        ) {
+            Text("Snooze 5 minutes", fontSize = 20.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onStop,
+            modifier = Modifier.height(56.dp).padding(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+        ) {
+            Text("Stop", fontSize = 20.sp)
+        }
     }
 }
