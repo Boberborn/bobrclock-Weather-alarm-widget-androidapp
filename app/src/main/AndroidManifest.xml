@@ -45,6 +45,7 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.bobr.clockweatheralarm.REFRESH_WEATHER" />
+                <action android:name="com.bobr.clockweatheralarm.TAP_WIDGET" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

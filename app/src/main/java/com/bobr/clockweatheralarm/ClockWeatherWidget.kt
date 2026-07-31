@@ -1,4 +1,4 @@
-package com.bobr.clockweatheralarm
+﻿package com.bobr.clockweatheralarm
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -19,7 +19,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
         appWidgetIds.forEach {
             appWidgetManager.updateAppWidget(
                 it,
-                render(context, options(appWidgetManager, it)),
+                render(context, options(context, appWidgetManager, it)),
             )
         }
         WeatherScheduler.ensureScheduled(context)
@@ -35,7 +35,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         appWidgetManager.updateAppWidget(
             appWidgetId,
-            render(context, options(appWidgetManager, appWidgetId)),
+            render(context, options(context, appWidgetManager, appWidgetId)),
         )
     }
 
@@ -43,11 +43,25 @@ class ClockWeatherWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
         if (intent.action == ACTION_REFRESH) {
             WeatherScheduler.refreshNow(context)
+        } else if (intent.action == ACTION_TAP) {
+            val now = System.currentTimeMillis()
+            if (now - lastTap < DOUBLE_TAP_MS) {
+                lastTap = 0
+                val open = Intent(context, InstructionActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(open)
+            } else {
+                lastTap = now
+            }
         }
     }
 
     companion object {
         const val ACTION_REFRESH = "com.bobr.clockweatheralarm.REFRESH_WEATHER"
+        const val ACTION_TAP = "com.bobr.clockweatheralarm.TAP_WIDGET"
+        private const val DOUBLE_TAP_MS = 400L
+        private const val CELL_HEIGHT_DP = 58
+        private var lastTap = 0L
 
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -55,37 +69,54 @@ class ClockWeatherWidget : AppWidgetProvider() {
             manager.getAppWidgetIds(component).forEach {
                 manager.updateAppWidget(
                     it,
-                    render(context, options(manager, it)),
+                    render(context, options(context, manager, it)),
                 )
             }
         }
 
-        private data class WidgetOptions(val small: Boolean, val showHourly: Boolean)
+        private data class WidgetOptions(
+            val small: Boolean,
+            val showHourly: Boolean,
+            val minHeight: Int,
+            val minWidth: Int,
+        ) {
+            val wide4: Boolean get() = minWidth >= 300
+        }
 
-        private fun options(manager: AppWidgetManager, widgetId: Int): WidgetOptions {
+        private fun options(context: Context, manager: AppWidgetManager, widgetId: Int): WidgetOptions {
             val options = manager.getAppWidgetOptions(widgetId)
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-            android.util.Log.d("WidgetSize", "id=$widgetId minWidth=$minWidth minHeight=$minHeight")
+            android.util.Log.d("WidgetSize", "id=$widgetId $options")
+            android.util.Log.d(
+                "WidgetSize",
+                "id=$widgetId minWidth=$minWidth minHeight=$minHeight " +
+                    "density=${context.resources.displayMetrics.density} " +
+                    "scaled=${context.resources.displayMetrics.scaledDensity}",
+            )
             return WidgetOptions(
                 small = minWidth in 1..250,
-                showHourly = minHeight >= 40,
+                showHourly = minHeight >= 65,
+                minHeight = minHeight,
+                minWidth = minWidth,
             )
         }
 
         private fun render(context: Context, opts: WidgetOptions): RemoteViews {
             val small = opts.small
             val showHourly = opts.showHourly
+            val wide4 = opts.wide4
             val prefs = Prefs.values(context)
             val location = prefs.getString(Prefs.LOCATION_NAME, null)
                 ?: context.getString(R.string.set_location)
             val temperature = prefs.getString(Prefs.WEATHER_TEMP, null)
             val weatherCode = prefs.getInt(Prefs.WEATHER_CODE, -1)
-            val alarms = AlarmStore.load(context).take(3)
-            val layout = if (small) {
-                R.layout.widget_clock_weather_small
-            } else {
-                R.layout.widget_clock_weather
+            val alarms = AlarmStore.load(context).filter { it.enabled }.take(3)
+            val compact = !showHourly
+            val layout = when {
+                compact -> R.layout.widget_clock_weather_compact
+                small -> R.layout.widget_clock_weather_small
+                else -> R.layout.widget_clock_weather
             }
 
             return RemoteViews(context.packageName, layout).apply {
@@ -95,41 +126,101 @@ class ClockWeatherWidget : AppWidgetProvider() {
                     temperature?.let { "$it°" } ?: context.getString(R.string.weather_waiting),
                 )
                 setTextViewText(R.id.weather_condition, conditionText(weatherCode))
-                val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && !small
-                val alarmVisibility = if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE
-                setViewVisibility(R.id.alarm_label, alarmVisibility)
-                setViewVisibility(R.id.alarm_status, alarmVisibility)
-                setTextViewText(R.id.alarm_label, context.getString(R.string.alarm_widget_time))
-                setTextViewText(
-                    R.id.alarm_status,
-                    if (alarms.isEmpty()) {
-                        context.getString(R.string.alarm_widget_off)
-                    } else {
-                        alarms.joinToString("\n") { String.format("%02d:%02d", it.hour, it.minute) }
-                    },
-                )
+                setImageViewResource(R.id.weather_icon, weatherIconRes(weatherCode))
 
-                val open = PendingIntent.getActivity(
+                if (compact) {
+                    setViewVisibility(R.id.clock_row, android.view.View.VISIBLE)
+                    setViewVisibility(R.id.clock_col, android.view.View.GONE)
+                    setViewVisibility(R.id.alarm_block, android.view.View.GONE)
+                    setViewVisibility(R.id.weather_location, android.view.View.GONE)
+                    setViewVisibility(R.id.hourly_container, android.view.View.GONE)
+                    setViewVisibility(R.id.date_row, android.view.View.VISIBLE)
+                    setViewVisibility(R.id.date_top, android.view.View.GONE)
+                    setViewVisibility(R.id.weather_condition, android.view.View.GONE)
+                    setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
+                } else {
+                    val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && !small && alarms.isNotEmpty()
+                    val alarmVisibility =
+                        if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE
+                    setViewVisibility(R.id.alarm_block, alarmVisibility)
+                    setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
+                    setViewVisibility(R.id.weather_temperature, android.view.View.VISIBLE)
+                    setViewVisibility(
+                        R.id.weather_condition,
+                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
+                    setViewVisibility(
+                        R.id.weather_location,
+                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
+                    setViewVisibility(
+                        R.id.weather_uv,
+                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
+                    setTextViewText(
+                        R.id.weather_uv,
+                        prefs.getString(Prefs.WEATHER_UV, null)?.let { "UV $it" } ?: "",
+                    )
+                    setViewVisibility(R.id.clock_row, android.view.View.GONE)
+                    setViewVisibility(R.id.clock_col, android.view.View.VISIBLE)
+                    setViewVisibility(R.id.date_row, android.view.View.GONE)
+                    setViewVisibility(R.id.date_top, android.view.View.VISIBLE)
+                    val timeSp = ((CELL_HEIGHT_DP - 12) / 0.8f).coerceIn(20f, 64f)
+                    setTextViewTextSize(
+                        R.id.time_col,
+                        android.util.TypedValue.COMPLEX_UNIT_SP,
+                        timeSp,
+                    )
+                    setTextViewText(
+                        R.id.alarm_label,
+                        context.getString(R.string.alarm_widget_time),
+                    )
+                    setTextViewText(
+                        R.id.alarm_status,
+                        if (alarms.isEmpty()) {
+                            context.getString(R.string.alarm_widget_off)
+                        } else {
+                            alarms.joinToString("\n") { String.format("%02d:%02d", it.hour, it.minute) }
+                        },
+                    )
+                    if (showHourly) {
+                        setViewVisibility(R.id.hourly_container, android.view.View.VISIBLE)
+                        renderHourly(this, context, prefs)
+                    } else {
+                        setViewVisibility(R.id.hourly_container, android.view.View.GONE)
+                    }
+                }
+
+                val tap = PendingIntent.getBroadcast(
                     context,
-                    6101,
-                    Intent(context, InstructionActivity::class.java),
+                    6102,
+                    Intent(context, ClockWeatherWidget::class.java).setAction(ACTION_TAP),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
-                setOnClickPendingIntent(R.id.widget_root, open)
-
-                if (showHourly) renderHourly(this, context, prefs)
+                setOnClickPendingIntent(R.id.widget_root, tap)
             }
         }
 
         private fun renderHourly(rv: RemoteViews, context: Context, prefs: android.content.SharedPreferences) {
             val hourly = prefs.getString(Prefs.WEATHER_HOURLY, null) ?: return
+            val now = java.time.LocalTime.now()
             rv.removeAllViews(R.id.hourly_container)
             hourly.split("|").forEach { entry ->
                 val parts = entry.split(";")
-                if (parts.size == 2) {
+                if (parts.size >= 2) {
+                    val entryTime = try {
+                        java.time.LocalTime.parse(parts[0])
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (entryTime == null || !entryTime.isAfter(now)) return@forEach
                     val item = RemoteViews(context.packageName, R.layout.widget_hour_item)
                     item.setTextViewText(R.id.hour_time, parts[0])
                     item.setTextViewText(R.id.hour_temp, "${parts[1]}°")
+                    item.setImageViewResource(
+                        R.id.hour_icon,
+                        weatherIconRes(parts.getOrNull(2)?.toIntOrNull() ?: -1),
+                    )
                     rv.addView(R.id.hourly_container, item)
                 }
             }
@@ -162,6 +253,17 @@ class ClockWeatherWidget : AppWidgetProvider() {
             96 -> "Thunderstorm, hail"
             99 -> "Severe thunderstorm"
             else -> "Weather"
+        }
+
+        private fun weatherIconRes(code: Int): Int = when (code) {
+            0, 1 -> R.drawable.ic_weather_clear
+            2 -> R.drawable.ic_weather_partly_cloudy
+            45, 48 -> R.drawable.ic_weather_fog
+            51, 53, 55, 56, 57, 66 -> R.drawable.ic_weather_drizzle
+            61, 63, 65, 67, 80, 81, 82 -> R.drawable.ic_weather_rain
+            71, 73, 75, 77, 85, 86 -> R.drawable.ic_weather_snow
+            95, 96, 99 -> R.drawable.ic_weather_thunderstorm
+            else -> R.drawable.ic_weather_cloudy
         }
 
         @Suppress("unused")

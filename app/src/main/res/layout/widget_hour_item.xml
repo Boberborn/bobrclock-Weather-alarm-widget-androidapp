@@ -5,21 +5,36 @@
     android:layout_weight="1"
     android:gravity="center"
     android:orientation="vertical"
-    android:paddingTop="6dp">
+    android:paddingTop="4dp">
+
+    <ImageView
+        android:id="@+id/hour_icon"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_weather_cloudy" />
 
     <TextView
         android:id="@+id/hour_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#FF9CA3AF"
-        android:textSize="10sp" />
+        android:textColor="#FFFFFFFF"
+        android:textSize="14sp"
+        android:shadowColor="#FF000000"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="2.5" />
 
     <TextView
         android:id="@+id/hour_temp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#FFFFFFFF"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:shadowColor="#FF000000"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="2.5" />
 
 </LinearLayout>

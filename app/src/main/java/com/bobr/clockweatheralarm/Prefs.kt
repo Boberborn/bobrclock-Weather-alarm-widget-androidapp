@@ -16,6 +16,8 @@ object Prefs {
     const val LONGITUDE = "longitude"
     const val WEATHER_TEMP = "weather_temp"
     const val WEATHER_HOURLY = "weather_hourly"
+    const val WEATHER_HOURLY_ALL = "weather_hourly_all"
+    const val WEATHER_UV = "weather_uv"
     const val WEATHER_CODE = "weather_code"
     const val WEATHER_WIND = "weather_wind_mph"
     const val WEATHER_WIND_DIR = "weather_wind_deg"
@@ -23,6 +25,14 @@ object Prefs {
     const val WEATHER_UPDATED = "weather_updated"
     const val WEATHER_INTERVAL_MINUTES = "weather_interval_minutes"
     const val WIDGET_SHOW_ALARMS = "widget_show_alarms"
+    const val WEATHER_FEELS_LIKE = "weather_feels_like"
+    const val WEATHER_HUMIDITY = "weather_humidity"
+    const val WEATHER_PRESSURE = "weather_pressure"
+    const val WEATHER_CLOUD_COVER = "weather_cloud_cover"
+    const val WEATHER_WIND_GUST = "weather_wind_gust"
+    const val WEATHER_PRECIPITATION = "weather_precipitation"
+    const val WEATHER_VISIBILITY = "weather_visibility"
+    const val WEATHER_DEW_POINT = "weather_dew_point"
 
     fun values(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 }

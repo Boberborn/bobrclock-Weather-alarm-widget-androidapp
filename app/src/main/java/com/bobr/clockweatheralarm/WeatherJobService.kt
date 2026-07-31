@@ -34,10 +34,18 @@ class WeatherJobService : JobService() {
         val endpoint = URL(
             "https://api.open-meteo.com/v1/forecast" +
                 "?latitude=$latitude&longitude=$longitude" +
-                "&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m" +
+                "&current=temperature_2m,apparent_temperature,relative_humidity_2m," +
+                "precipitation,weather_code,cloud_cover,surface_pressure," +
+                "wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index" +
+                "&hourly=temperature_2m,precipitation_probability,weather_code," +
+                "relative_humidity_2m,dew_point_2m,visibility,cloud_cover," +
+                "surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index" +
+                "&daily=weather_code,temperature_2m_max,temperature_2m_min," +
+                "apparent_temperature_max,apparent_temperature_min,sunrise,sunset," +
+                "uv_index_max,precipitation_sum,precipitation_probability_max," +
+                "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant" +
                 "&wind_speed_unit=mph" +
-                "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=6" +
-                "&hourly=temperature_2m&forecast_hours=7&timezone=auto",
+                "&forecast_days=7&timezone=auto",
         )
         val connection = endpoint.openConnection() as HttpURLConnection
         return try {
@@ -47,17 +55,74 @@ class WeatherJobService : JobService() {
             if (connection.responseCode !in 200..299) return false
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)
+
             val current = json.getJSONObject("current")
             val hourly = json.getJSONObject("hourly")
-            val times = hourly.getJSONArray("time")
-            val temps = hourly.getJSONArray("temperature_2m")
+            val hTimes = hourly.getJSONArray("time")
+            val hTemps = hourly.getJSONArray("temperature_2m")
+            val hCodes = hourly.getJSONArray("weather_code")
+            val hPrecipProb = hourly.optJSONArray("precipitation_probability")
+            val hHumidity = hourly.optJSONArray("relative_humidity_2m")
+            val hDewPoint = hourly.optJSONArray("dew_point_2m")
+            val hVisibility = hourly.optJSONArray("visibility")
+            val hCloud = hourly.optJSONArray("cloud_cover")
+            val hPressure = hourly.optJSONArray("surface_pressure")
+            val hWindSpeed = hourly.optJSONArray("wind_speed_10m")
+            val hWindDir = hourly.optJSONArray("wind_direction_10m")
+            val hWindGust = hourly.optJSONArray("wind_gusts_10m")
+            val hUv = hourly.optJSONArray("uv_index")
+
             val hourlyOut = StringBuilder()
-            for (i in 1 until times.length()) {
-                if (hourlyOut.isNotEmpty()) hourlyOut.append("|")
-                hourlyOut.append(times.getString(i).substring(11, 16))
-                    .append(";")
-                    .append(temps.getDouble(i).toInt())
+            val hourlyAllOut = StringBuilder()
+            val nowHour = java.time.LocalTime.now().withMinute(0).toString()
+            var startIdx = 0
+            while (startIdx < hTimes.length() &&
+                hTimes.getString(startIdx).substring(11, 16) < nowHour
+            ) {
+                startIdx++
             }
+            if (startIdx < hTimes.length()) {
+                val limit = minOf(startIdx + 7, hTimes.length())
+                for (i in startIdx until limit) {
+                    if (hourlyOut.isNotEmpty()) hourlyOut.append("|")
+                    hourlyOut.append(hTimes.getString(i).substring(11, 16))
+                        .append(";")
+                        .append(hTemps.getDouble(i).toInt())
+                        .append(";")
+                        .append(hCodes.getInt(i))
+                }
+            }
+            for (i in 0 until hTimes.length()) {
+                if (hourlyAllOut.isNotEmpty()) hourlyAllOut.append("|")
+                hourlyAllOut.append(hTimes.getString(i).substring(0, 10))
+                    .append(";")
+                    .append(hTimes.getString(i).substring(11, 16))
+                    .append(";")
+                    .append(hTemps.getDouble(i).toInt())
+                    .append(";")
+                    .append(hCodes.getInt(i))
+                    .append(";")
+                    .append(optInt(hPrecipProb, i, -1))
+                    .append(";")
+                    .append(optInt(hHumidity, i, -1))
+                    .append(";")
+                    .append(optDoubleStr(hDewPoint, i))
+                    .append(";")
+                    .append(optDoubleStr(hVisibility, i))
+                    .append(";")
+                    .append(optInt(hCloud, i, -1))
+                    .append(";")
+                    .append(optDoubleStr(hPressure, i))
+                    .append(";")
+                    .append(optDoubleStr(hWindSpeed, i))
+                    .append(";")
+                    .append(optInt(hWindDir, i, -1))
+                    .append(";")
+                    .append(optDoubleStr(hWindGust, i))
+                    .append(";")
+                    .append(optDoubleStr(hUv, i))
+            }
+
             val daily = json.optJSONObject("daily")
             val dailyOut = StringBuilder()
             if (daily != null) {
@@ -65,31 +130,69 @@ class WeatherJobService : JobService() {
                 val dCodes = daily.getJSONArray("weather_code")
                 val dMax = daily.getJSONArray("temperature_2m_max")
                 val dMin = daily.getJSONArray("temperature_2m_min")
+                val dAppMax = daily.optJSONArray("apparent_temperature_max")
+                val dAppMin = daily.optJSONArray("apparent_temperature_min")
+                val dSunrise = daily.optJSONArray("sunrise")
+                val dSunset = daily.optJSONArray("sunset")
+                val dUvMax = daily.optJSONArray("uv_index_max")
+                val dPrecipSum = daily.optJSONArray("precipitation_sum")
+                val dPrecipProb = daily.optJSONArray("precipitation_probability_max")
+                val dWindMax = daily.optJSONArray("wind_speed_10m_max")
+                val dWindGust = daily.optJSONArray("wind_gusts_10m_max")
+                val dWindDir = daily.optJSONArray("wind_direction_10m_dominant")
                 for (i in 0 until dTimes.length()) {
                     if (dailyOut.isNotEmpty()) dailyOut.append("|")
                     dailyOut.append(dTimes.getString(i))
-                        .append(";")
-                        .append(dCodes.getInt(i))
-                        .append(";")
-                        .append(dMax.getDouble(i).toInt())
-                        .append(";")
-                        .append(dMin.getDouble(i).toInt())
+                        .append(";").append(dCodes.getInt(i))
+                        .append(";").append(dMax.getDouble(i).toInt())
+                        .append(";").append(dMin.getDouble(i).toInt())
+                        .append(";").append(optInt(dAppMax, i, dMax.getDouble(i).toInt()))
+                        .append(";").append(optInt(dAppMin, i, dMin.getDouble(i).toInt()))
+                        .append(";").append(optString(dSunrise, i))
+                        .append(";").append(optString(dSunset, i))
+                        .append(";").append(optDoubleStr(dUvMax, i))
+                        .append(";").append(optDoubleStr(dPrecipSum, i))
+                        .append(";").append(optInt(dPrecipProb, i, -1))
+                        .append(";").append(optDoubleStr(dWindMax, i))
+                        .append(";").append(optDoubleStr(dWindGust, i))
+                        .append(";").append(optInt(dWindDir, i, -1))
                 }
             }
+
+            val uv = current.optDouble("uv_index", -1.0)
+            val uvText = if (uv >= 0) {
+                val s = String.format(java.util.Locale.US, "%.1f", uv)
+                if (s.endsWith(".0")) s.dropLast(2) else s
+            } else null
+
+            val visibility = if (hVisibility != null && hVisibility.length() > 0) {
+                val v = hVisibility.getDouble(0)
+                String.format(java.util.Locale.US, "%.0f", v)
+            } else null
+
+            val dewPoint = if (hDewPoint != null && hDewPoint.length() > 0) {
+                val dp = hDewPoint.getDouble(0)
+                String.format(java.util.Locale.US, "%.1f", dp)
+            } else null
+
             prefs.edit()
                 .putString(Prefs.WEATHER_TEMP, current.getDouble("temperature_2m").toInt().toString())
                 .putInt(Prefs.WEATHER_CODE, current.getInt("weather_code"))
-                .putInt(
-                    Prefs.WEATHER_WIND,
-                    current.optDouble("wind_speed_10m", -1.0).toInt(),
-                )
-                .putInt(
-                    Prefs.WEATHER_WIND_DIR,
-                    current.optInt("wind_direction_10m", -1),
-                )
+                .putString(Prefs.WEATHER_FEELS_LIKE, current.getDouble("apparent_temperature").toInt().toString())
+                .putString(Prefs.WEATHER_HUMIDITY, current.getDouble("relative_humidity_2m").toInt().toString())
+                .putString(Prefs.WEATHER_PRESSURE, current.getDouble("surface_pressure").toString())
+                .putString(Prefs.WEATHER_CLOUD_COVER, current.getDouble("cloud_cover").toInt().toString())
+                .putInt(Prefs.WEATHER_WIND, current.optDouble("wind_speed_10m", -1.0).toInt())
+                .putInt(Prefs.WEATHER_WIND_DIR, current.optInt("wind_direction_10m", -1))
+                .putString(Prefs.WEATHER_WIND_GUST, current.getDouble("wind_gusts_10m").toInt().toString())
+                .putString(Prefs.WEATHER_PRECIPITATION, current.getDouble("precipitation").toString())
+                .putString(Prefs.WEATHER_VISIBILITY, visibility)
+                .putString(Prefs.WEATHER_DEW_POINT, dewPoint)
                 .putString(Prefs.WEATHER_DAILY, dailyOut.toString())
+                .putString(Prefs.WEATHER_UV, uvText)
                 .putLong(Prefs.WEATHER_UPDATED, System.currentTimeMillis())
                 .putString(Prefs.WEATHER_HOURLY, hourlyOut.toString())
+                .putString(Prefs.WEATHER_HOURLY_ALL, hourlyAllOut.toString())
                 .apply()
             true
         } catch (_: Exception) {
@@ -97,6 +200,21 @@ class WeatherJobService : JobService() {
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun optInt(arr: org.json.JSONArray?, idx: Int, fallback: Int): Int {
+        if (arr == null || idx >= arr.length()) return fallback
+        return try { arr.getDouble(idx).toInt() } catch (_: Exception) { fallback }
+    }
+
+    private fun optDoubleStr(arr: org.json.JSONArray?, idx: Int): String {
+        if (arr == null || idx >= arr.length()) return ""
+        return try { arr.getDouble(idx).toString() } catch (_: Exception) { "" }
+    }
+
+    private fun optString(arr: org.json.JSONArray?, idx: Int): String {
+        if (arr == null || idx >= arr.length()) return ""
+        return try { arr.getString(idx) } catch (_: Exception) { "" }
     }
 
     private fun resolveQuery(query: String): Pair<String, String>? {

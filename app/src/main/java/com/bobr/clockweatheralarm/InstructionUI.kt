@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,9 +27,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -184,6 +191,64 @@ private data class DailyUiModel(
     val low: Int,
 )
 
+private data class HourUiModel(
+    val time: String,
+    val temperature: Int,
+    val weatherCode: Int,
+)
+
+private data class DayForecastUiModel(
+    val date: LocalDate,
+    val label: String,
+    val isToday: Boolean,
+    val condition: String,
+    val weatherType: WeatherType,
+    val high: Int,
+    val low: Int,
+    val currentTemp: String?,
+    val wind: String,
+    val hours: List<HourUiModel>,
+)
+
+private data class HourDetailUiModel(
+    val time: String,
+    val temperature: Int,
+    val weatherCode: Int,
+    val precipProb: Int,
+)
+
+private data class DailyDetailUiModel(
+    val date: LocalDate,
+    val label: String,
+    val isToday: Boolean,
+    val weatherCode: Int,
+    val weatherType: WeatherType,
+    val condition: String,
+    val high: Int,
+    val low: Int,
+    val appHigh: Int,
+    val appLow: Int,
+    val sunrise: String,
+    val sunset: String,
+    val uvMax: String,
+    val precipSum: Double,
+    val precipProb: Int,
+    val windMax: Int,
+    val windGust: Int,
+    val windDir: Int,
+)
+
+private data class CurrentDetailUiModel(
+    val feelsLike: String,
+    val humidity: Int,
+    val pressure: Double,
+    val cloudCover: Int,
+    val windGust: Int,
+    val precipitation: Double,
+    val visibility: Double,
+    val dewPoint: Double,
+)
+
 private val DemoLocation = "Portland, OR"
 private const val DemoCondition = "Partly Sunny"
 private const val DemoTemperature = "72°"
@@ -206,6 +271,65 @@ private val DemoForecast = listOf(
     ForecastUiModel("TUE", WeatherType.Rain, 68, 50),
     ForecastUiModel("WED", WeatherType.PartlyCloudy, 72, 52),
     ForecastUiModel("THU", WeatherType.Clear, 77, 53),
+    ForecastUiModel("FRI", WeatherType.Snow, 38, 29),
+)
+
+private val DemoDayPages = listOf(
+    DayForecastUiModel(
+        date = LocalDate.now(),
+        label = "TODAY",
+        isToday = true,
+        condition = DemoCondition,
+        weatherType = WeatherType.PartlyCloudy,
+        high = 76,
+        low = 54,
+        currentTemp = "72°",
+        wind = DemoWind,
+        hours = listOf(
+            HourUiModel("12:00", 72, 2),
+            HourUiModel("13:00", 74, 2),
+            HourUiModel("14:00", 75, 0),
+            HourUiModel("15:00", 76, 0),
+            HourUiModel("16:00", 74, 2),
+            HourUiModel("17:00", 72, 2),
+        ),
+    ),
+    DayForecastUiModel(
+        date = LocalDate.now().plusDays(1),
+        label = "SAT",
+        isToday = false,
+        condition = "Clear sky",
+        weatherType = WeatherType.Clear,
+        high = 78,
+        low = 55,
+        currentTemp = null,
+        wind = "",
+        hours = listOf(
+            HourUiModel("08:00", 57, 0),
+            HourUiModel("11:00", 66, 0),
+            HourUiModel("14:00", 74, 0),
+            HourUiModel("17:00", 78, 0),
+            HourUiModel("20:00", 70, 0),
+        ),
+    ),
+    DayForecastUiModel(
+        date = LocalDate.now().plusDays(2),
+        label = "SUN",
+        isToday = false,
+        condition = "Light rain",
+        weatherType = WeatherType.Rain,
+        high = 68,
+        low = 50,
+        currentTemp = null,
+        wind = "",
+        hours = listOf(
+            HourUiModel("08:00", 52, 61),
+            HourUiModel("11:00", 58, 61),
+            HourUiModel("14:00", 64, 63),
+            HourUiModel("17:00", 68, 63),
+            HourUiModel("20:00", 60, 61),
+        ),
+    ),
 )
 
 private val DemoAlarms = listOf(
@@ -229,15 +353,56 @@ fun InstructionUI(modifier: Modifier = Modifier) {
     var alarms by remember { mutableStateOf(if (isPreview) DemoAlarms else AlarmStore.load(context)) }
     var weather by remember { mutableStateOf(if (isPreview) DemoWeather else loadWeatherUi(context)) }
     var forecast by remember { mutableStateOf(if (isPreview) DemoForecast else loadForecastUi(context)) }
+    var dayPages by remember {
+        mutableStateOf(if (isPreview) DemoDayPages else loadDayPagesUi(context))
+    }
     var weatherNeedsRefresh by remember { mutableStateOf(false) }
+    var currentDetail by remember { mutableStateOf(if (isPreview) null else loadCurrentDetail(context)) }
+    var dailyDetails by remember { mutableStateOf(if (isPreview) emptyList<DailyDetailUiModel>() else loadDailyDetails(context)) }
+    var hourlyDetails by remember { mutableStateOf(if (isPreview) emptyMap<LocalDate, List<HourDetailUiModel>>() else loadHourlyDetails(context)) }
+    var gpsAutoTried by remember { mutableStateOf(false) }
+
+    val gpsAutoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            doGpsLocation(context)
+            weatherNeedsRefresh = true
+            WeatherScheduler.refreshNow(context)
+        }
+    }
 
     if (!isPreview) {
+        LaunchedEffect(Unit) {
+            if (!gpsAutoTried) {
+                gpsAutoTried = true
+                val prefs = Prefs.values(context)
+                if (prefs.getString(Prefs.LATITUDE, null) == null) {
+                    val activity = context as? android.app.Activity
+                    if (activity != null &&
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
+                        activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        gpsAutoLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                    } else {
+                        doGpsLocation(context)
+                        weatherNeedsRefresh = true
+                        WeatherScheduler.refreshNow(context)
+                    }
+                }
+            }
+        }
         LaunchedEffect(weatherNeedsRefresh) {
             if (weatherNeedsRefresh) {
                 weatherNeedsRefresh = false
                 delay(6_000)
                 weather = loadWeatherUi(context)
                 forecast = loadForecastUi(context)
+                dayPages = loadDayPagesUi(context)
+                currentDetail = loadCurrentDetail(context)
+                dailyDetails = loadDailyDetails(context)
+                hourlyDetails = loadHourlyDetails(context)
             }
         }
         LaunchedEffect(Unit) {
@@ -245,6 +410,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                 delay(60_000)
                 weather = loadWeatherUi(context)
                 forecast = loadForecastUi(context)
+                dayPages = loadDayPagesUi(context)
+                currentDetail = loadCurrentDetail(context)
+                dailyDetails = loadDailyDetails(context)
+                hourlyDetails = loadHourlyDetails(context)
             }
         }
     }
@@ -377,21 +546,17 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                         }
                         InstructionTab.Weather -> {
                             Spacer(Modifier.height(8.dp))
-                            CurrentWeatherCard(
-                                location = weather.location,
-                                condition = weather.condition,
-                                temperature = weather.temperature,
-                                high = weather.high,
-                                low = weather.low,
-                                wind = weather.wind,
-                                onClick = {
+                            WeatherDashboard(
+                                weather = weather,
+                                currentDetail = currentDetail,
+                                dailyDetails = dailyDetails,
+                                hourlyDetails = hourlyDetails,
+                                onRefresh = {
                                     weatherNeedsRefresh = true
                                     WeatherScheduler.refreshNow(context)
                                     toast(context, "Refreshing weather…")
                                 },
                             )
-                            Spacer(Modifier.height(8.dp))
-                            ForecastCard(forecast = forecast)
                             Spacer(Modifier.height(16.dp))
                         }
                         InstructionTab.More -> {
@@ -405,6 +570,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 onWeatherStateReload = {
                                     weather = loadWeatherUi(context)
                                     forecast = loadForecastUi(context)
+                                    dayPages = loadDayPagesUi(context)
+                                    currentDetail = loadCurrentDetail(context)
+                                    dailyDetails = loadDailyDetails(context)
+                                    hourlyDetails = loadHourlyDetails(context)
                                 },
                             )
                         }
@@ -568,6 +737,10 @@ private fun applyLocation(context: Context, result: JSONObject) {
 }
 
 private fun useGpsLocation(context: Context) {
+    doGpsLocation(context)
+}
+
+private fun doGpsLocation(context: Context) {
     val coords = WeatherJobService.lastKnownLocation(context)
     if (coords == null) {
         toast(context, "Location not found. Enable GPS and try again.")
@@ -626,7 +799,6 @@ private fun loadWeatherUi(context: Context): WeatherUiModel {
 private fun loadForecastUi(context: Context): List<ForecastUiModel> =
     loadDailyUi(context)
         .filterNot { it.date == java.time.LocalDate.now() }
-        .take(5)
         .map { daily ->
             ForecastUiModel(
                 day = daily.date.format(DAY_SHORT_FORMAT).uppercase(Locale.getDefault()),
@@ -652,6 +824,134 @@ private fun loadDailyUi(context: Context): List<DailyUiModel> {
             null
         }
     }
+}
+
+private fun loadHourlyByDate(context: Context): Map<LocalDate, List<HourUiModel>> {
+    val raw = Prefs.values(context).getString(Prefs.WEATHER_HOURLY_ALL, null) ?: return emptyMap()
+    val result = HashMap<LocalDate, MutableList<HourUiModel>>()
+    raw.split("|").forEach { entry ->
+        val parts = entry.split(";")
+        if (parts.size < 4) return@forEach
+        try {
+            val date = LocalDate.parse(parts[0])
+            result.getOrPut(date) { mutableListOf() }
+                .add(HourUiModel(parts[1], parts[2].toInt(), parts[3].toInt()))
+        } catch (_: Exception) {
+        }
+    }
+    return result
+}
+
+private fun loadDayPagesUi(context: Context): List<DayForecastUiModel> {
+    val prefs = Prefs.values(context)
+    val location = prefs.getString(Prefs.LOCATION_NAME, null)
+        ?: context.getString(R.string.set_location)
+    val currentTemp = prefs.getString(Prefs.WEATHER_TEMP, null)
+    val wind = prefs.getInt(Prefs.WEATHER_WIND, -1)
+    val windDir = prefs.getInt(Prefs.WEATHER_WIND_DIR, -1)
+    val windText = if (wind >= 0 && windDir >= 0) {
+        "$wind mph ${windCompass(windDir)}"
+    } else {
+        "--"
+    }
+    val today = LocalDate.now()
+    val hourlyByDate = loadHourlyByDate(context)
+    val currentCode = prefs.getInt(Prefs.WEATHER_CODE, -1)
+    return loadDailyUi(context).map { daily ->
+        val isToday = daily.date == today
+        val useCurrent = isToday && currentCode >= 0
+        DayForecastUiModel(
+            date = daily.date,
+            label = if (isToday) {
+                "TODAY"
+            } else {
+                daily.date.format(DAY_SHORT_FORMAT).uppercase(Locale.getDefault())
+            },
+            isToday = isToday,
+            condition = if (useCurrent) {
+                weatherConditionText(currentCode)
+            } else {
+                weatherConditionText(daily.weatherCode)
+            },
+            weatherType = if (useCurrent) {
+                weatherType(currentCode)
+            } else {
+                weatherType(daily.weatherCode)
+            },
+            high = daily.high,
+            low = daily.low,
+            currentTemp = if (isToday) currentTemp?.let { "$it°" } else null,
+            wind = if (isToday) windText else "",
+            hours = hourlyByDate[daily.date] ?: emptyList(),
+        )
+    }
+}
+
+private fun loadCurrentDetail(context: Context): CurrentDetailUiModel {
+    val prefs = Prefs.values(context)
+    return CurrentDetailUiModel(
+        feelsLike = prefs.getString(Prefs.WEATHER_FEELS_LIKE, null)?.let { "${it}°" } ?: "--°",
+        humidity = prefs.getString(Prefs.WEATHER_HUMIDITY, null)?.toIntOrNull() ?: -1,
+        pressure = prefs.getString(Prefs.WEATHER_PRESSURE, null)?.toDoubleOrNull() ?: -1.0,
+        cloudCover = prefs.getString(Prefs.WEATHER_CLOUD_COVER, null)?.toIntOrNull() ?: -1,
+        windGust = prefs.getString(Prefs.WEATHER_WIND_GUST, null)?.toIntOrNull() ?: -1,
+        precipitation = prefs.getString(Prefs.WEATHER_PRECIPITATION, null)?.toDoubleOrNull() ?: -1.0,
+        visibility = prefs.getString(Prefs.WEATHER_VISIBILITY, null)?.toDoubleOrNull() ?: -1.0,
+        dewPoint = prefs.getString(Prefs.WEATHER_DEW_POINT, null)?.toDoubleOrNull() ?: -999.0,
+    )
+}
+
+private fun loadDailyDetails(context: Context): List<DailyDetailUiModel> {
+    val raw = Prefs.values(context).getString(Prefs.WEATHER_DAILY, null) ?: return emptyList()
+    val today = LocalDate.now()
+    return raw.split("|").mapNotNull { entry ->
+        val parts = entry.split(";")
+        if (parts.size < 4) return@mapNotNull null
+        try {
+            val date = LocalDate.parse(parts[0])
+            DailyDetailUiModel(
+                date = date,
+                label = if (date == today) "TODAY" else date.format(DateTimeFormatter.ofPattern("EEE", java.util.Locale.getDefault())).uppercase(Locale.getDefault()),
+                isToday = date == today,
+                weatherCode = parts[1].toInt(),
+                weatherType = weatherType(parts[1].toInt()),
+                condition = weatherConditionText(parts[1].toInt()),
+                high = parts[2].toInt(),
+                low = parts[3].toInt(),
+                appHigh = parts.getOrNull(4)?.toIntOrNull() ?: parts[2].toInt(),
+                appLow = parts.getOrNull(5)?.toIntOrNull() ?: parts[3].toInt(),
+                sunrise = parts.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { s -> try { java.time.LocalDateTime.parse(s).format(DateTimeFormatter.ofPattern("HH:mm")) } catch (_: Exception) { "" } } ?: "",
+                sunset = parts.getOrNull(7)?.takeIf { it.isNotBlank() }?.let { s -> try { java.time.LocalDateTime.parse(s).format(DateTimeFormatter.ofPattern("HH:mm")) } catch (_: Exception) { "" } } ?: "",
+                uvMax = parts.getOrNull(8)?.takeIf { it.isNotBlank() } ?: "",
+                precipSum = parts.getOrNull(9)?.toDoubleOrNull() ?: 0.0,
+                precipProb = parts.getOrNull(10)?.toIntOrNull() ?: -1,
+                windMax = parts.getOrNull(11)?.toDoubleOrNull()?.toInt() ?: -1,
+                windGust = parts.getOrNull(12)?.toDoubleOrNull()?.toInt() ?: -1,
+                windDir = parts.getOrNull(13)?.toIntOrNull() ?: -1,
+            )
+        } catch (_: Exception) { null }
+    }
+}
+
+private fun loadHourlyDetails(context: Context): Map<LocalDate, List<HourDetailUiModel>> {
+    val raw = Prefs.values(context).getString(Prefs.WEATHER_HOURLY_ALL, null) ?: return emptyMap()
+    val result = HashMap<LocalDate, MutableList<HourDetailUiModel>>()
+    raw.split("|").forEach { entry ->
+        val parts = entry.split(";")
+        if (parts.size < 5) return@forEach
+        try {
+            val date = LocalDate.parse(parts[0])
+            result.getOrPut(date) { mutableListOf() }.add(
+                HourDetailUiModel(
+                    time = parts[1],
+                    temperature = parts[2].toInt(),
+                    weatherCode = parts[3].toInt(),
+                    precipProb = parts[4].toIntOrNull() ?: -1,
+                )
+            )
+        } catch (_: Exception) {}
+    }
+    return result
 }
 
 private fun weatherConditionText(code: Int): String = when (code) {
@@ -1105,11 +1405,774 @@ private fun WindIcon(modifier: Modifier = Modifier) {
 }
 
 // ---------------------------------------------------------------------------
+// Weather day pager
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun WeatherDayPager(
+    pages: List<DayForecastUiModel>,
+    location: String,
+    onRefresh: () -> Unit,
+) {
+    if (pages.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(148.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(PaperCard.copy(alpha = 0.85f))
+                .handDrawnBorder(cornerRadius = 24.dp)
+                .olivePress(onRefresh)
+                .padding(14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "No weather data yet — tap to refresh",
+                fontSize = 18.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+        }
+        return
+    }
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            DayWeatherPage(
+                page = pages[page],
+                location = location,
+                onRefresh = onRefresh,
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            pages.forEachIndexed { index, _ ->
+                val active = index == pagerState.currentPage
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .size(if (active) 9.dp else 7.dp)
+                        .clip(CircleShape)
+                        .background(if (active) OlivePrimary else DividerBeige),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayWeatherPage(
+    page: DayForecastUiModel,
+    location: String,
+    onRefresh: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = page.label,
+            fontSize = 22.sp,
+            color = OliveDark,
+            fontFamily = FontFamily.Cursive,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, bottom = 6.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(148.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(PaperCard.copy(alpha = 0.85f))
+                .handDrawnBorder(cornerRadius = 24.dp)
+                .olivePress(onRefresh)
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(0.44f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (page.isToday) {
+                    SunWithClouds(Modifier.size(120.dp, 105.dp))
+                } else {
+                    WeatherIcon(page.weatherType, Modifier.size(84.dp))
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(0.56f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                if (page.isToday) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LocationPin(Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = location,
+                            fontSize = 17.sp,
+                            color = OliveDark,
+                            fontFamily = FontFamily.Cursive,
+                            maxLines = 1,
+                        )
+                    }
+                    Text(
+                        text = page.condition,
+                        fontSize = 18.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = page.currentTemp ?: "${page.high}°",
+                            fontSize = 58.sp,
+                            color = OlivePrimary,
+                            fontFamily = FontFamily.Cursive,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "H: ${page.high}°",
+                                fontSize = 17.sp,
+                                color = WarmOrange,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                            Text(
+                                text = "L: ${page.low}°",
+                                fontSize = 17.sp,
+                                color = RainBlue,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        WindIcon(Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = page.wind,
+                            fontSize = 15.sp,
+                            color = OliveMuted,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = page.condition,
+                        fontSize = 22.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                        maxLines = 2,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${page.high}°",
+                            fontSize = 58.sp,
+                            color = OlivePrimary,
+                            fontFamily = FontFamily.Cursive,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "H: ${page.high}°",
+                                fontSize = 17.sp,
+                                color = WarmOrange,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                            Text(
+                                text = "L: ${page.low}°",
+                                fontSize = 17.sp,
+                                color = RainBlue,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        HourlyRow(hours = page.hours)
+    }
+}
+
+@Composable
+private fun HourlyRow(hours: List<HourUiModel>) {
+    if (hours.isEmpty()) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(PaperCard)
+            .handDrawnBorder(cornerRadius = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp),
+        ) {
+            items(hours) { hour ->
+                Column(
+                    modifier = Modifier.width(62.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = hour.time,
+                        fontSize = 14.sp,
+                        color = OliveMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    WeatherIcon(weatherType(hour.weatherCode), Modifier.size(32.dp))
+                    Text(
+                        text = "${hour.temperature}°",
+                        fontSize = 16.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Weather dashboard
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun WeatherDashboard(
+    weather: WeatherUiModel,
+    currentDetail: CurrentDetailUiModel?,
+    dailyDetails: List<DailyDetailUiModel>,
+    hourlyDetails: Map<LocalDate, List<HourDetailUiModel>>,
+    onRefresh: () -> Unit,
+) {
+    val today = LocalDate.now()
+    val todayDetail = dailyDetails.firstOrNull { it.date == today }
+    val todayHours = hourlyDetails[today] ?: emptyList()
+    var selectedDay by remember { mutableStateOf<DailyDetailUiModel?>(null) }
+
+    CurrentWeatherCardEnhanced(
+        location = weather.location,
+        condition = weather.condition,
+        temperature = weather.temperature,
+        high = weather.high,
+        low = weather.low,
+        wind = weather.wind,
+        feelsLike = currentDetail?.feelsLike ?: "--°",
+        precipProb = todayDetail?.precipProb ?: -1,
+        onClick = onRefresh,
+    )
+    Spacer(Modifier.height(8.dp))
+    HourlyForecastSection(hours = todayHours)
+    Spacer(Modifier.height(10.dp))
+    DailyForecastSection(
+        dailyDetails = dailyDetails,
+        selectedDay = selectedDay,
+        onSelectDay = { selectedDay = it },
+    )
+    Spacer(Modifier.height(10.dp))
+    WeatherDetailsGrid(
+        currentDetail = currentDetail,
+        todayDetail = todayDetail,
+        weather = weather,
+    )
+}
+
+private fun dayLabel(date: LocalDate): String {
+    val today = LocalDate.now()
+    return when (date) {
+        today -> "TODAY"
+        today.plusDays(1) -> "TOMORROW"
+        else -> date.format(DateTimeFormatter.ofPattern("EEE", java.util.Locale.getDefault())).uppercase(Locale.getDefault())
+    }
+}
+
+@Composable
+private fun CurrentWeatherCardEnhanced(
+    location: String,
+    condition: String,
+    temperature: String,
+    high: String,
+    low: String,
+    wind: String,
+    feelsLike: String,
+    precipProb: Int,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(PaperCard.copy(alpha = 0.85f))
+            .handDrawnBorder(cornerRadius = 24.dp)
+            .olivePress(onClick)
+            .padding(14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(130.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                SunWithClouds(Modifier.size(120.dp, 105.dp))
+            }
+            Column(
+                Modifier.weight(0.58f).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LocationPin(Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(location, fontSize = 17.sp, color = OliveDark, fontFamily = FontFamily.Cursive, maxLines = 1)
+                }
+                Text(condition, fontSize = 18.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(temperature, fontSize = 58.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Normal, maxLines = 1)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("H: $high", fontSize = 17.sp, color = WarmOrange, fontFamily = FontFamily.Cursive)
+                        Text("L: $low", fontSize = 17.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    WindIcon(Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(wind, fontSize = 15.sp, color = OliveMuted, fontFamily = FontFamily.Cursive)
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Feels like", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(feelsLike, fontSize = 18.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+            }
+            Box(Modifier.width(1.dp).fillMaxHeight().background(DividerBeige))
+            if (precipProb >= 0) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Rain", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                    Text("$precipProb%", fontSize = 18.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
+                }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(DividerBeige))
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Wind", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(wind, fontSize = 18.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HourlyForecastSection(hours: List<HourDetailUiModel>) {
+    if (hours.isEmpty()) return
+    val now = LocalTime.now()
+    Column {
+        Text(
+            "HOURLY FORECAST",
+            fontSize = 18.sp,
+            color = OliveDark,
+            fontFamily = FontFamily.Cursive,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(PaperCard)
+                .handDrawnBorder(cornerRadius = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                items(hours) { hour ->
+                    val isNow = try {
+                        val ht = LocalTime.parse(hour.time)
+                        !ht.isAfter(now) && ht.isAfter(now.minusHours(1))
+                    } catch (_: Exception) { false }
+                    Column(
+                        modifier = Modifier.width(64.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            if (isNow) "Now" else hour.time,
+                            fontSize = 13.sp,
+                            color = if (isNow) OlivePrimary else OliveMuted,
+                            fontFamily = FontFamily.Cursive,
+                            fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
+                        )
+                        WeatherIcon(weatherType(hour.weatherCode), Modifier.size(30.dp))
+                        Text("${hour.temperature}°", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                        if (hour.precipProb > 0) {
+                            Text("${hour.precipProb}%", fontSize = 11.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyForecastSection(
+    dailyDetails: List<DailyDetailUiModel>,
+    selectedDay: DailyDetailUiModel?,
+    onSelectDay: (DailyDetailUiModel?) -> Unit,
+) {
+    Column {
+        Text(
+            "DAILY FORECAST",
+            fontSize = 18.sp,
+            color = OliveDark,
+            fontFamily = FontFamily.Cursive,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        val allHighs = dailyDetails.map { it.high }
+        val allLows = dailyDetails.map { it.low }
+        val globalMin = allLows.minOrNull() ?: 0
+        val globalMax = allHighs.maxOrNull() ?: 1
+        val range = (globalMax - globalMin).coerceAtLeast(1)
+        dailyDetails.forEach { day ->
+            DailyForecastRow(
+                day = day,
+                globalMin = globalMin,
+                globalMax = globalMax,
+                range = range,
+                isExpanded = selectedDay == day,
+                onTap = { onSelectDay(if (selectedDay == day) null else day) },
+            )
+            if (selectedDay == day) {
+                DailyDetailExpanded(day = day)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyForecastRow(
+    day: DailyDetailUiModel,
+    globalMin: Int,
+    globalMax: Int,
+    range: Int,
+    isExpanded: Boolean,
+    onTap: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (day.isToday) Modifier.background(PaperSelected.copy(alpha = 0.4f)) else Modifier)
+            .olivePress(onTap)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.width(52.dp)) {
+            Text(day.label, fontSize = 15.sp, color = if (day.isToday) OlivePrimary else OliveDark, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+            Text(day.date.format(DateTimeFormatter.ofPattern("d MMM")), fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+        }
+        WeatherIcon(day.weatherType, Modifier.size(28.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(day.condition, fontSize = 13.sp, color = TextBrown, fontFamily = FontFamily.Cursive, modifier = Modifier.weight(1f), maxLines = 1)
+        if (day.precipProb >= 0) {
+            Text("${day.precipProb}%", fontSize = 12.sp, color = RainBlue, fontFamily = FontFamily.Cursive, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center)
+        } else {
+            Spacer(Modifier.width(36.dp))
+        }
+        Text("${day.low}°", fontSize = 14.sp, color = RainBlue, fontFamily = FontFamily.Cursive, modifier = Modifier.width(32.dp), textAlign = TextAlign.End)
+        Box(
+            modifier = Modifier
+                .width(60.dp)
+                .height(4.dp)
+                .padding(horizontal = 2.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(DividerBeige),
+        ) {
+            val leftFrac = ((day.low - globalMin).toFloat() / range).coerceIn(0f, 1f)
+            val rightFrac = ((day.high - globalMin).toFloat() / range).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(start = (56.dp * leftFrac), end = (56.dp * (1f - rightFrac)))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (day.isToday) OlivePrimary else CoralCheek),
+            )
+        }
+        Text("${day.high}°", fontSize = 14.sp, color = WarmOrange, fontFamily = FontFamily.Cursive, modifier = Modifier.width(32.dp), textAlign = TextAlign.Start)
+    }
+}
+
+@Composable
+private fun DailyDetailExpanded(day: DailyDetailUiModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(PaperCard.copy(alpha = 0.7f))
+            .handDrawnBorder(cornerRadius = 14.dp)
+            .padding(12.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+            if (day.sunrise.isNotBlank()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Sunrise", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                    Text(day.sunrise, fontSize = 15.sp, color = SunOrange, fontFamily = FontFamily.Cursive)
+                }
+            }
+            if (day.sunset.isNotBlank()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Sunset", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                    Text(day.sunset, fontSize = 15.sp, color = MustardYellow, fontFamily = FontFamily.Cursive)
+                }
+            }
+            if (day.uvMax.isNotBlank()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("UV max", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                    Text(day.uvMax, fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                }
+            }
+        }
+        if (day.windMax > 0 || day.windGust > 0) {
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                if (day.windMax > 0) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Wind max", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                        Text("${day.windMax} mph", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                    }
+                }
+                if (day.windGust > 0) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Gusts", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                        Text("${day.windGust} mph", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                    }
+                }
+                if (day.precipSum > 0) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Rain", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                        Text("${String.format(java.util.Locale.US, "%.1f", day.precipSum)} mm", fontSize = 15.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherDetailsGrid(
+    currentDetail: CurrentDetailUiModel?,
+    todayDetail: DailyDetailUiModel?,
+    weather: WeatherUiModel,
+) {
+    Text(
+        "DETAILS",
+        fontSize = 18.sp,
+        color = OliveDark,
+        fontFamily = FontFamily.Cursive,
+        modifier = Modifier.padding(bottom = 6.dp),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UvDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail, todayDetail = todayDetail)
+            WindDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail, weather = weather)
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HumidityDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+            SunriseDetailCard(modifier = Modifier.weight(1f), todayDetail = todayDetail)
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FeelsLikeDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail, weather = weather)
+            VisibilityDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PressureDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+            CloudCoverDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+        }
+        if (currentDetail != null && currentDetail.precipitation > 0) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrecipitationDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+                if (currentDetail.dewPoint > -900) {
+                    DewPointDetailCard(modifier = Modifier.weight(1f), currentDetail = currentDetail)
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailCardBase(modifier: Modifier = Modifier, title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(PaperCard.copy(alpha = 0.7f))
+            .handDrawnBorder(cornerRadius = 14.dp)
+            .padding(12.dp),
+    ) {
+        Text(title, fontSize = 13.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+        Spacer(Modifier.height(4.dp))
+        content()
+    }
+}
+
+@Composable
+private fun UvDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?, todayDetail: DailyDetailUiModel?) {
+    val uvStr = todayDetail?.uvMax?.takeIf { it.isNotBlank() }
+    val uv = uvStr?.toDoubleOrNull() ?: -1.0
+    DetailCardBase(modifier = modifier, title = "UV INDEX") {
+        if (uvStr == null || uv < 0) {
+            Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+            return@DetailCardBase
+        }
+        Text(uvStr, fontSize = 30.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        val (category, advice) = uvCategory(uv)
+        Text(category, fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(DividerBeige)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth((uv / 11.0).toFloat().coerceIn(0f, 1f)).clip(RoundedCornerShape(2.dp)).background(OlivePrimary))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(advice, fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive, maxLines = 2)
+    }
+}
+
+private fun uvCategory(uv: Double): Pair<String, String> = when {
+    uv <= 2 -> "Low" to "No protection needed"
+    uv <= 5 -> "Moderate" to "Wear sunscreen"
+    uv <= 7 -> "High" to "Use SPF 30+, seek shade"
+    uv <= 10 -> "Very high" to "Avoid midday sun"
+    else -> "Extreme" to "Stay indoors midday"
+}
+
+@Composable
+private fun WindDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?, weather: WeatherUiModel) {
+    val wind = weather.wind
+    val gust = currentDetail?.windGust?.takeIf { it > 0 }
+    DetailCardBase(modifier = modifier, title = "WIND") {
+        Text(wind, fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        if (gust != null) {
+            Text("Gusts $gust mph", fontSize = 13.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+        }
+        Spacer(Modifier.height(4.dp))
+        Canvas(Modifier.size(36.dp)) {
+            drawCircle(OliveMuted, 14.dp.toPx(), center, style = Stroke(1.dp.toPx()))
+            drawLine(OlivePrimary, center, Offset(center.x, center.y + 10.dp.toPx()), strokeWidth = 2.dp.toPx())
+        }
+    }
+}
+
+@Composable
+private fun HumidityDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?) {
+    val h = currentDetail?.humidity?.takeIf { it >= 0 }
+    DetailCardBase(modifier = modifier, title = "HUMIDITY") {
+        if (h == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
+        Text("$h%", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        val label = when { h < 30 -> "Dry"; h < 55 -> "Comfortable"; h < 75 -> "Humid"; else -> "Very humid" }
+        Text(label, fontSize = 13.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+        if (currentDetail.dewPoint > -900) {
+            Text("Dew point ${currentDetail.dewPoint.toInt()}°", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+        }
+    }
+}
+
+@Composable
+private fun SunriseDetailCard(modifier: Modifier, todayDetail: DailyDetailUiModel?) {
+    val sunrise = todayDetail?.sunrise?.takeIf { it.isNotBlank() }
+    val sunset = todayDetail?.sunset?.takeIf { it.isNotBlank() }
+    DetailCardBase(modifier = modifier, title = "SUNRISE & SUNSET") {
+        if (sunrise == null || sunset == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
+        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Sunrise", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(sunrise, fontSize = 18.sp, color = SunOrange, fontFamily = FontFamily.Cursive)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Sunset", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(sunset, fontSize = 18.sp, color = MustardYellow, fontFamily = FontFamily.Cursive)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeelsLikeDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?, weather: WeatherUiModel) {
+    DetailCardBase(modifier = modifier, title = "FEELS LIKE") {
+        val f = currentDetail?.feelsLike ?: weather.temperature
+        Text(f, fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        Text("Actual ${weather.temperature}", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+    }
+}
+
+@Composable
+private fun VisibilityDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?) {
+    val v = currentDetail?.visibility?.takeIf { it > 0 }
+    DetailCardBase(modifier = modifier, title = "VISIBILITY") {
+        if (v == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
+        val km = v / 1000.0
+        Text("${String.format(java.util.Locale.US, "%.1f", km)} km", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        val label = when { km >= 10 -> "Excellent"; km >= 5 -> "Good"; km >= 2 -> "Moderate"; else -> "Poor" }
+        Text(label, fontSize = 13.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+    }
+}
+
+@Composable
+private fun PressureDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?) {
+    val p = currentDetail?.pressure?.takeIf { it > 0 }
+    DetailCardBase(modifier = modifier, title = "PRESSURE") {
+        if (p == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
+        Text("${p.toInt()} hPa", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun CloudCoverDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?) {
+    val c = currentDetail?.cloudCover?.takeIf { it >= 0 }
+    DetailCardBase(modifier = modifier, title = "CLOUD COVER") {
+        if (c == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
+        Text("$c%", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        val label = when { c <= 10 -> "Clear"; c <= 40 -> "Partly cloudy"; c <= 80 -> "Mostly cloudy"; else -> "Overcast" }
+        Text(label, fontSize = 13.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+    }
+}
+
+@Composable
+private fun PrecipitationDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel) {
+    DetailCardBase(modifier = modifier, title = "PRECIPITATION") {
+        Text("${String.format(java.util.Locale.US, "%.1f", currentDetail.precipitation)} mm", fontSize = 26.sp, color = RainBlue, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun DewPointDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel) {
+    DetailCardBase(modifier = modifier, title = "DEW POINT") {
+        Text("${currentDetail.dewPoint.toInt()}°", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Five-day forecast card
 // ---------------------------------------------------------------------------
 
 @Composable
 private fun ForecastCard(forecast: List<ForecastUiModel>) {
+    if (forecast.isEmpty()) return
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1119,42 +2182,54 @@ private fun ForecastCard(forecast: List<ForecastUiModel>) {
             .handDrawnBorder(cornerRadius = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        forecast.forEachIndexed { index, day ->
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Text(
-                    text = day.day,
-                    fontSize = 16.sp,
-                    color = OliveDark,
-                    fontFamily = FontFamily.Cursive,
-                )
-                WeatherIcon(day.weatherType, Modifier.size(34.dp))
-                Text(
-                    text = "${day.high}°",
-                    fontSize = 18.sp,
-                    color = TextBrown,
-                    fontFamily = FontFamily.Cursive,
-                )
-                Text(
-                    text = "${day.low}°",
-                    fontSize = 16.sp,
-                    color = RainBlue,
-                    fontFamily = FontFamily.Cursive,
-                )
-            }
-            if (index < forecast.lastIndex) {
-                Box(
-                    Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .padding(vertical = 12.dp)
-                        .background(DividerBeige),
-                )
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 6.dp),
+        ) {
+            itemsIndexed(forecast) { index, day ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (index > 0) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .width(1.dp)
+                                .padding(vertical = 12.dp)
+                                .background(DividerBeige),
+                        )
+                    }
+                    ForecastDayCell(day)
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ForecastDayCell(day: ForecastUiModel) {
+    Column(
+        modifier = Modifier.width(70.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        Text(
+            text = day.day,
+            fontSize = 16.sp,
+            color = OliveDark,
+            fontFamily = FontFamily.Cursive,
+        )
+        WeatherIcon(day.weatherType, Modifier.size(34.dp))
+        Text(
+            text = "${day.high}°",
+            fontSize = 18.sp,
+            color = TextBrown,
+            fontFamily = FontFamily.Cursive,
+        )
+        Text(
+            text = "${day.low}°",
+            fontSize = 16.sp,
+            color = RainBlue,
+            fontFamily = FontFamily.Cursive,
+        )
     }
 }
 
@@ -1997,18 +3072,25 @@ private fun MoreTabContent(
     var locationQuery by remember {
         mutableStateOf(prefs.getString(Prefs.LOCATION_NAME, "") ?: "")
     }
-    var postcodeQuery by remember {
-        mutableStateOf(prefs.getString(Prefs.POSTCODE, "") ?: "")
-    }
     var savingLocation by remember { mutableStateOf(false) }
-    var interval by remember { mutableStateOf(WeatherScheduler.intervalMinutes(context)) }
     var widgetShowAlarms by remember {
         mutableStateOf(prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true))
     }
-
     fun reloadWeather() {
         onWeatherStateReload()
         WeatherScheduler.refreshNow(context)
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            doGpsLocation(context)
+            locationQuery = prefs.getString(Prefs.LOCATION_NAME, "") ?: ""
+            reloadWeather()
+        } else {
+            toast(context, "Location permission denied")
+        }
     }
 
     Spacer(Modifier.height(8.dp))
@@ -2057,7 +3139,7 @@ private fun MoreTabContent(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "City or postcode used for the forecast.",
+                text = "City used for the forecast.",
                 fontSize = 14.sp,
                 color = TextMuted,
                 fontFamily = FontFamily.Cursive,
@@ -2070,14 +3152,6 @@ private fun MoreTabContent(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = postcodeQuery,
-                onValueChange = { postcodeQuery = it },
-                label = { Text("Postcode") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
@@ -2085,18 +3159,16 @@ private fun MoreTabContent(
                         if (savingLocation) return@Button
                         savingLocation = true
                         scope.launch {
-                            val query = postcodeQuery.trim()
-                                .ifBlank { locationQuery.trim().substringBefore(",") }
+                            val query = locationQuery.trim().substringBefore(",")
                             val result = if (query.length < 2) null else {
                                 withContext(Dispatchers.IO) { geocode(query, 1)?.firstOrNull() }
                             }
                             savingLocation = false
                             if (result == null) {
-                                toast(context, "Location not found. Try a city name or postcode.")
+                                toast(context, "Location not found. Try a city name.")
                             } else {
                                 applyLocation(context, result)
                                 locationQuery = cityLabel(result)
-                                postcodeQuery = prefs.getString(Prefs.POSTCODE, "") ?: ""
                                 reloadWeather()
                             }
                         }
@@ -2110,10 +3182,18 @@ private fun MoreTabContent(
                 }
                 Button(
                     onClick = {
-                        useGpsLocation(context)
-                        locationQuery = prefs.getString(Prefs.LOCATION_NAME, "") ?: ""
-                        postcodeQuery = prefs.getString(Prefs.POSTCODE, "") ?: ""
-                        reloadWeather()
+                        val activity = context as? android.app.Activity
+                        if (activity != null &&
+                            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
+                            activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        } else {
+            doGpsLocation(context)
+            locationQuery = prefs.getString(Prefs.LOCATION_NAME, "") ?: ""
+            reloadWeather()
+                        }
                     },
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                         containerColor = OlivePrimary,
@@ -2123,45 +3203,6 @@ private fun MoreTabContent(
                     Text("Use GPS", fontFamily = FontFamily.Cursive)
                 }
             }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text(
-                text = "Weather update interval",
-                fontSize = 17.sp,
-                color = TextBrown,
-                fontFamily = FontFamily.Cursive,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "How often the app refreshes conditions in the background.",
-                fontSize = 14.sp,
-                color = TextMuted,
-                fontFamily = FontFamily.Cursive,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = formatInterval(interval),
-                fontSize = 16.sp,
-                color = OlivePrimary,
-                fontFamily = FontFamily.Cursive,
-            )
-            Slider(
-                value = interval.toFloat(),
-                onValueChange = { interval = it.roundToInt() },
-                valueRange = WeatherScheduler.MIN_INTERVAL_MINUTES.toFloat()..
-                    WeatherScheduler.MAX_INTERVAL_MINUTES.toFloat(),
-                steps = (WeatherScheduler.MAX_INTERVAL_MINUTES - WeatherScheduler.MIN_INTERVAL_MINUTES) / 10 - 1,
-                onValueChangeFinished = {
-                    val minutes = interval.coerceIn(
-                        WeatherScheduler.MIN_INTERVAL_MINUTES,
-                        WeatherScheduler.MAX_INTERVAL_MINUTES,
-                    ) / 10 * 10
-                    WeatherScheduler.updateInterval(context, minutes)
-                },
-            )
         }
     }
     Spacer(Modifier.height(10.dp))
