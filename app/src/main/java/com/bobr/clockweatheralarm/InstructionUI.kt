@@ -7,7 +7,12 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -31,10 +36,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -97,6 +105,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -114,6 +123,7 @@ import java.net.URL
 import java.net.URLEncoder
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -364,6 +374,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
     var currentDetail by remember { mutableStateOf(if (isPreview) null else loadCurrentDetail(context)) }
     var dailyDetails by remember { mutableStateOf(if (isPreview) emptyList<DailyDetailUiModel>() else loadDailyDetails(context)) }
     var hourlyDetails by remember { mutableStateOf(if (isPreview) emptyMap<LocalDate, List<HourDetailUiModel>>() else loadHourlyDetails(context)) }
+    var weatherCode by remember { mutableStateOf(if (isPreview) 0 else Prefs.values(context).getInt(Prefs.WEATHER_CODE, -1)) }
     var gpsAutoTried by remember { mutableStateOf(false) }
 
     val gpsAutoLauncher = rememberLauncherForActivityResult(
@@ -407,6 +418,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                 currentDetail = loadCurrentDetail(context)
                 dailyDetails = loadDailyDetails(context)
                 hourlyDetails = loadHourlyDetails(context)
+                weatherCode = Prefs.values(context).getInt(Prefs.WEATHER_CODE, -1)
             }
         }
         LaunchedEffect(Unit) {
@@ -418,6 +430,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                 currentDetail = loadCurrentDetail(context)
                 dailyDetails = loadDailyDetails(context)
                 hourlyDetails = loadHourlyDetails(context)
+                weatherCode = Prefs.values(context).getInt(Prefs.WEATHER_CODE, -1)
             }
         }
     }
@@ -469,10 +482,17 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                     )
                     when (selectedTab) {
                         InstructionTab.Clock -> {
-                            LargeClock(
-                                time = rememberClockText(isPreview),
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 20.dp, bottom = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                LargeClock(
+                                    time = rememberClockText(isPreview),
+                                    modifier = Modifier.fillMaxWidth(0.6f),
+                                )
+                            }
                             DateLabel(
                                 date = if (isPreview) {
                                     "Saturday, May 18, 2024"
@@ -481,7 +501,9 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(8.dp))
+                            MonthCalendar()
+                            Spacer(Modifier.height(8.dp))
                             CurrentWeatherCard(
                                 location = weather.location,
                                 condition = weather.condition,
@@ -489,6 +511,11 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 high = weather.high,
                                 low = weather.low,
                                 wind = weather.wind,
+                                weatherCode = weatherCode,
+                                isNight = isNightAt(
+                                    dailyDetails.firstOrNull { it.isToday }?.sunrise ?: "",
+                                    dailyDetails.firstOrNull { it.isToday }?.sunset ?: "",
+                                ),
                                 onClick = {
                                     weatherNeedsRefresh = true
                                     WeatherScheduler.refreshNow(context)
@@ -496,8 +523,6 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 },
                             )
                             Spacer(Modifier.height(8.dp))
-                            ForecastCard(forecast = forecast)
-                            Spacer(Modifier.height(6.dp))
                             AlarmsHeader(onAdd = {
                                 editingAlarmId = null
                                 alarmEditorVisible = true
@@ -555,6 +580,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 currentDetail = currentDetail,
                                 dailyDetails = dailyDetails,
                                 hourlyDetails = hourlyDetails,
+                                weatherCode = weatherCode,
                                 onRefresh = {
                                     weatherNeedsRefresh = true
                                     WeatherScheduler.refreshNow(context)
@@ -578,6 +604,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     currentDetail = loadCurrentDetail(context)
                                     dailyDetails = loadDailyDetails(context)
                                     hourlyDetails = loadHourlyDetails(context)
+                                    weatherCode = Prefs.values(context).getInt(Prefs.WEATHER_CODE, -1)
                                 },
                             )
                         }
@@ -1312,6 +1339,85 @@ private fun DateLabel(date: String, modifier: Modifier = Modifier) {
     )
 }
 
+@Composable
+private fun MonthCalendar() {
+    val now = if (LocalInspectionMode.current) LocalDate.of(2024, 5, 18) else LocalDate.now()
+    val firstOfMonth = now.withDayOfMonth(1)
+    val daysInMonth = now.lengthOfMonth()
+    val startDow = firstOfMonth.dayOfWeek.value % 7
+    val title = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.getDefault()))
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(PaperCard.copy(alpha = 0.85f))
+            .handDrawnBorder(cornerRadius = 20.dp)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = title.replaceFirstChar { it.uppercase() },
+            fontSize = 18.sp,
+            color = OliveDark,
+            fontFamily = FontFamily.Cursive,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        )
+        val dayNames = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            dayNames.forEach {
+                Text(
+                    text = it,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Cursive,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        val totalCells = startDow + daysInMonth
+        val weeks = (totalCells + 6) / 7
+        var dayCounter = 1
+        repeat(weeks) { week ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                repeat(7) { col ->
+                    val cellIndex = week * 7 + col
+                    if (cellIndex < startDow || dayCounter > daysInMonth) {
+                        Spacer(Modifier.weight(1f).padding(3.dp))
+                    } else {
+                        val isToday = dayCounter == now.dayOfMonth
+                        Text(
+                            text = "$dayCounter",
+                            fontSize = 14.sp,
+                            color = if (isToday) PaperBackground else TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(2.dp)
+                                .then(
+                                    if (isToday)
+                                        Modifier.clip(CircleShape).background(OlivePrimary)
+                                    else
+                                        Modifier,
+                                )
+                                .padding(3.dp),
+                        )
+                        dayCounter++
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Current weather card
 // ---------------------------------------------------------------------------
@@ -1324,6 +1430,8 @@ private fun CurrentWeatherCard(
     high: String,
     low: String,
     wind: String,
+    weatherCode: Int,
+    isNight: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -1347,7 +1455,7 @@ private fun CurrentWeatherCard(
                 .fillMaxHeight(),
             contentAlignment = Alignment.Center,
         ) {
-            SunWithClouds(Modifier.size(120.dp, 105.dp))
+            DynamicWeatherArtwork(weatherCode = weatherCode, isNight = isNight, modifier = Modifier.size(120.dp, 105.dp))
         }
         Column(
             modifier = Modifier
@@ -1699,12 +1807,24 @@ private fun WeatherDashboard(
     currentDetail: CurrentDetailUiModel?,
     dailyDetails: List<DailyDetailUiModel>,
     hourlyDetails: Map<LocalDate, List<HourDetailUiModel>>,
+    weatherCode: Int,
     onRefresh: () -> Unit,
 ) {
     val today = LocalDate.now()
     val todayDetail = dailyDetails.firstOrNull { it.date == today }
-    val todayHours = hourlyDetails[today] ?: emptyList()
+    val days = dailyDetails.sortedBy { it.date }
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(pageCount = { days.size })
+    val hourStates = remember { mutableMapOf<LocalDate, LazyListState>() }
     var selectedDay by remember { mutableStateOf<DailyDetailUiModel?>(null) }
+
+    val isNight = isNightAt(todayDetail?.sunrise ?: "", todayDetail?.sunset ?: "")
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            days.getOrNull(page)?.let { selectedDay = it }
+        }
+    }
 
     CurrentWeatherCardEnhanced(
         location = weather.location,
@@ -1715,15 +1835,29 @@ private fun WeatherDashboard(
         wind = weather.wind,
         feelsLike = currentDetail?.feelsLike ?: "--°",
         precipProb = todayDetail?.precipProb ?: -1,
+        weatherCode = weatherCode,
+        isNight = isNight,
         onClick = onRefresh,
     )
     Spacer(Modifier.height(8.dp))
-    HourlyForecastSection(hours = todayHours)
+    HourlyDayPager(
+        days = days,
+        hourlyDetails = hourlyDetails,
+        pagerState = pagerState,
+        hourStates = hourStates,
+    )
     Spacer(Modifier.height(10.dp))
     DailyForecastSection(
         dailyDetails = dailyDetails,
         selectedDay = selectedDay,
-        onSelectDay = { selectedDay = it },
+        onSelectDay = { day ->
+            val newSel = if (selectedDay == day) null else day
+            selectedDay = newSel
+            if (newSel != null) {
+                val idx = days.indexOfFirst { it.date == newSel.date }
+                if (idx >= 0) scope.launch { pagerState.animateScrollToPage(idx) }
+            }
+        },
     )
     Spacer(Modifier.height(10.dp))
     WeatherDetailsGrid(
@@ -1733,6 +1867,16 @@ private fun WeatherDashboard(
     )
 }
 
+private fun initialHourIndex(hours: List<HourDetailUiModel>, isToday: Boolean): Int {
+    if (hours.isEmpty()) return 0
+    if (!isToday) return 0
+    val nowHour = LocalTime.now().hour
+    val idx = hours.indexOfFirst {
+        try { LocalTime.parse(it.time).hour >= nowHour } catch (_: Exception) { false }
+    }
+    return if (idx < 0) 0 else idx
+}
+
 private fun dayLabel(date: LocalDate): String {
     val today = LocalDate.now()
     return when (date) {
@@ -1740,6 +1884,14 @@ private fun dayLabel(date: LocalDate): String {
         today.plusDays(1) -> "TOMORROW"
         else -> date.format(DateTimeFormatter.ofPattern("EEE", java.util.Locale.getDefault())).uppercase(Locale.getDefault())
     }
+}
+
+private fun isNightAt(sunrise: String, sunset: String): Boolean {
+    val sr = sunrise.takeIf { it.isNotBlank() }?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+    val ss = sunset.takeIf { it.isNotBlank() }?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+    if (sr == null || ss == null) return false
+    val now = LocalTime.now()
+    return now.isBefore(sr) || !now.isBefore(ss)
 }
 
 @Composable
@@ -1752,6 +1904,8 @@ private fun CurrentWeatherCardEnhanced(
     wind: String,
     feelsLike: String,
     precipProb: Int,
+    weatherCode: Int,
+    isNight: Boolean,
     onClick: () -> Unit,
 ) {
     Column(
@@ -1768,7 +1922,7 @@ private fun CurrentWeatherCardEnhanced(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                SunWithClouds(Modifier.size(120.dp, 105.dp))
+                DynamicWeatherArtwork(weatherCode = weatherCode, isNight = isNight, modifier = Modifier.size(120.dp, 105.dp))
             }
             Column(
                 Modifier.weight(0.58f).fillMaxHeight(),
@@ -1821,9 +1975,13 @@ private fun CurrentWeatherCardEnhanced(
 }
 
 @Composable
-private fun HourlyForecastSection(hours: List<HourDetailUiModel>) {
-    if (hours.isEmpty()) return
-    val now = LocalTime.now()
+private fun HourlyDayPager(
+    days: List<DailyDetailUiModel>,
+    hourlyDetails: Map<LocalDate, List<HourDetailUiModel>>,
+    pagerState: PagerState,
+    hourStates: MutableMap<LocalDate, LazyListState>,
+) {
+    if (days.isEmpty()) return
     Column {
         Text(
             "HOURLY FORECAST",
@@ -1831,6 +1989,40 @@ private fun HourlyForecastSection(hours: List<HourDetailUiModel>) {
             color = OliveDark,
             fontFamily = FontFamily.Cursive,
             modifier = Modifier.padding(bottom = 6.dp),
+        )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            beyondViewportPageCount = 1,
+        ) { page ->
+            val day = days.getOrNull(page) ?: return@HorizontalPager
+            HourlyDayStrip(
+                day = day,
+                hours = hourlyDetails[day.date] ?: emptyList(),
+                state = hourStates.getOrPut(day.date) {
+                    LazyListState(initialHourIndex(hourlyDetails[day.date] ?: emptyList(), day.isToday))
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HourlyDayStrip(
+    day: DailyDetailUiModel,
+    hours: List<HourDetailUiModel>,
+    state: LazyListState,
+) {
+    val now = LocalTime.now()
+    val snapFling = rememberSnapFlingBehavior(lazyListState = state)
+    Column {
+        Text(
+            day.label,
+            fontSize = 12.sp,
+            color = OliveMuted,
+            fontFamily = FontFamily.Cursive,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 4.dp),
         )
         Row(
             modifier = Modifier
@@ -1841,7 +2033,12 @@ private fun HourlyForecastSection(hours: List<HourDetailUiModel>) {
                 .handDrawnBorder(cornerRadius = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
+            LazyRow(
+                state = state,
+                flingBehavior = snapFling,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+            ) {
                 items(hours) { hour ->
                     val isNow = try {
                         val ht = LocalTime.parse(hour.time)
@@ -1852,11 +2049,11 @@ private fun HourlyForecastSection(hours: List<HourDetailUiModel>) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            if (isNow) "Now" else hour.time,
+                            if (isNow && day.isToday) "Now" else hour.time,
                             fontSize = 13.sp,
-                            color = if (isNow) OlivePrimary else OliveMuted,
+                            color = if (isNow && day.isToday) OlivePrimary else OliveMuted,
                             fontFamily = FontFamily.Cursive,
-                            fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (isNow && day.isToday) FontWeight.Bold else FontWeight.Normal,
                         )
                         WeatherIcon(weatherType(hour.weatherCode), Modifier.size(30.dp))
                         Text("${hour.temperature}°", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
@@ -1918,7 +2115,7 @@ private fun DailyForecastRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .then(if (day.isToday) Modifier.background(PaperSelected.copy(alpha = 0.4f)) else Modifier)
+            .then(if (isExpanded) Modifier.background(PaperSelected.copy(alpha = 0.4f)) else Modifier)
             .olivePress(onTap)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2950,8 +3147,186 @@ private fun DrawScope.drawFace(
 }
 
 // ---------------------------------------------------------------------------
-// Current weather illustration (sun + two clouds)
+// Current weather illustration (dynamic, based on real conditions)
 // ---------------------------------------------------------------------------
+
+@Composable
+private fun DynamicWeatherArtwork(
+    weatherCode: Int,
+    isNight: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val type = weatherType(weatherCode)
+    val transition = rememberInfiniteTransition(label = "weather")
+    val pulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val rainPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
+        label = "rain",
+    )
+    val snowPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart),
+        label = "snow",
+    )
+    val flashPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Restart),
+        label = "flash",
+    )
+
+    Canvas(modifier) {
+        when (type) {
+            WeatherType.Clear -> if (isNight) drawClearNightArt(pulse) else drawClearDayArt(pulse)
+            WeatherType.PartlyCloudy -> if (isNight) drawNightCloudArt() else drawPartlyCloudyDayArt(pulse)
+            WeatherType.Cloudy -> drawCloudyArt()
+            WeatherType.Fog -> drawFogArt()
+            WeatherType.Drizzle -> drawRainArt(rainPhase, drizzle = true)
+            WeatherType.Rain -> drawRainArt(rainPhase, drizzle = false)
+            WeatherType.Snow -> drawSnowArt(snowPhase)
+            WeatherType.Thunderstorm -> drawStormArt(flashPhase)
+        }
+    }
+}
+
+private fun DrawScope.drawSunRays(c: Offset, r: Float, phase: Float) {
+    val ext = 0.1f + phase * 0.12f
+    repeat(12) { i ->
+        val a = (i * 30f + 3f) * (Math.PI / 180.0)
+        val cx = cos(a).toFloat()
+        val sy = sin(a).toFloat()
+        val inner = r * 1.1f
+        val outer = r * (1.38f + ext)
+        drawLine(
+            SunOrange,
+            Offset(c.x + cx * inner, c.y + sy * inner),
+            Offset(c.x + cx * outer, c.y + sy * outer),
+            r * 0.13f,
+            StrokeCap.Round,
+        )
+    }
+}
+
+private fun DrawScope.drawClearDayArt(pulse: Float) {
+    val bob = sin(pulse * Math.PI.toFloat() * 2f) * size.height * 0.025f
+    val sunC = Offset(size.width * 0.5f, size.height * 0.4f + bob)
+    val sunR = size.width * 0.3f
+    drawSunRays(sunC, sunR, pulse)
+    drawSunBody(sunC, sunR, rays = false)
+    drawFace(sunC.x, sunC.y + sunR * 0.05f, sunR * 0.55f, EyeStyle.Open, MouthStyle.Smile, cheeks = true)
+}
+
+private fun DrawScope.drawPartlyCloudyDayArt(pulse: Float) {
+    val sunC = Offset(size.width * 0.38f, size.height * 0.32f)
+    val sunR = size.width * 0.24f
+    drawSunRays(sunC, sunR, pulse)
+    drawSunBody(sunC, sunR, rays = false)
+    drawFace(sunC.x, sunC.y + sunR * 0.05f, sunR * 0.55f, EyeStyle.Open, MouthStyle.Smile, cheeks = true)
+    drawCloud(size.width * 0.58f, size.height * 0.6f, size.width * 0.6f, size.height * 0.34f, 1.6.dp.toPx())
+}
+
+private fun DrawScope.drawCloudyArt() {
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.5f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.85f, size.height * 0.42f, 1.6.dp.toPx())
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.15f, EyeStyle.HalfClosed, MouthStyle.Calm, cheeks = false)
+}
+
+private fun DrawScope.drawFogArt() {
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.45f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.8f, size.height * 0.36f, 1.5.dp.toPx())
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.14f, EyeStyle.HalfClosed, MouthStyle.Calm, cheeks = false)
+    val sw = 1.4.dp.toPx()
+    listOf(0.14f, 0.2f, 0.12f).forEachIndexed { i, len ->
+        val y = size.height * (0.78f + i * 0.06f)
+        val path = Path().apply {
+            moveTo(size.width * 0.16f, y)
+            lineTo(size.width * (0.16f + len * 0.8f), y)
+        }
+        drawPath(path, CloudBlue, style = Stroke(sw, cap = StrokeCap.Round))
+    }
+}
+
+private fun DrawScope.drawRainArt(phase: Float, drizzle: Boolean) {
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.42f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.78f, size.height * 0.34f, 1.5.dp.toPx())
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.14f, EyeStyle.HalfClosed, MouthStyle.Frown, cheeks = false)
+    val dropR = size.width * (if (drizzle) 0.025f else 0.04f)
+    val topY = size.height * 0.6f
+    val fall = size.height * 0.3f
+    val xs = if (drizzle)
+        listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f)
+    else
+        listOf(0.26f, 0.34f, 0.42f, 0.5f, 0.58f, 0.66f, 0.74f)
+    xs.forEachIndexed { i, fx ->
+        val p = (phase + i * 0.13f) % 1f
+        drawCircle(RainBlue, dropR, Offset(size.width * fx, topY + p * fall))
+    }
+}
+
+private fun DrawScope.drawSnowArt(phase: Float) {
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.42f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.78f, size.height * 0.34f, 1.5.dp.toPx())
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.14f, EyeStyle.Open, MouthStyle.Smile, cheeks = true)
+    val topY = size.height * 0.6f
+    val fall = size.height * 0.32f
+    listOf(0.28f, 0.38f, 0.5f, 0.62f, 0.72f).forEachIndexed { i, fx ->
+        val p = (phase + i * 0.2f) % 1f
+        val wobble = sin((phase * 4f + i) * Math.PI).toFloat() * size.width * 0.025f
+        drawSnowflake(size.width * fx + wobble, topY + p * fall, size.width * 0.04f)
+    }
+}
+
+private fun DrawScope.drawStormArt(phase: Float) {
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.4f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.8f, size.height * 0.38f, 1.5.dp.toPx(), fill = CloudGray.copy(alpha = 0.5f), outline = CloudGray)
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.15f, EyeStyle.Angry, MouthStyle.Frown, cheeks = false)
+    val boltAlpha = if (phase > 0.85f) 1f else 0f
+    val bolt = Path().apply {
+        moveTo(size.width * 0.48f, size.height * 0.6f)
+        lineTo(size.width * 0.42f, size.height * 0.76f)
+        lineTo(size.width * 0.5f, size.height * 0.74f)
+        lineTo(size.width * 0.44f, size.height * 0.92f)
+        lineTo(size.width * 0.6f, size.height * 0.7f)
+        lineTo(size.width * 0.52f, size.height * 0.72f)
+        lineTo(size.width * 0.58f, size.height * 0.6f)
+        close()
+    }
+    if (boltAlpha > 0f) drawPath(bolt, MustardYellow.copy(alpha = boltAlpha))
+}
+
+private fun DrawScope.drawClearNightArt(pulse: Float) {
+    val c = Offset(size.width * 0.52f, size.height * 0.42f)
+    val r = size.width * 0.3f
+    drawCircle(MustardYellow, r, c)
+    drawCircle(PaperBackground, r * 0.78f, Offset(c.x - r * 0.38f, c.y - r * 0.2f))
+    drawFace(c.x + r * 0.08f, c.y + r * 0.05f, r * 0.52f, EyeStyle.HalfClosed, MouthStyle.Calm, cheeks = false)
+    val starR = size.width * 0.045f
+    drawStar(size.width * 0.2f, size.height * 0.24f, starR * (1f + pulse * 0.5f))
+    drawStar(size.width * 0.82f, size.height * 0.2f, starR * (1.3f - pulse * 0.5f))
+    drawStar(size.width * 0.9f, size.height * 0.52f, starR)
+    drawStar(size.width * 0.14f, size.height * 0.56f, starR)
+}
+
+private fun DrawScope.drawNightCloudArt() {
+    val c = Offset(size.width * 0.72f, size.height * 0.32f)
+    val r = size.width * 0.2f
+    drawCircle(MustardYellow, r, c)
+    drawCircle(PaperBackground, r * 0.78f, Offset(c.x - r * 0.38f, c.y - r * 0.2f))
+    drawFace(c.x + r * 0.08f, c.y + r * 0.05f, r * 0.5f, EyeStyle.HalfClosed, MouthStyle.Calm, cheeks = false)
+    drawStar(size.width * 0.2f, size.height * 0.3f, size.width * 0.035f)
+    drawStar(size.width * 0.88f, size.height * 0.58f, size.width * 0.035f)
+    val cloudC = Offset(size.width * 0.5f, size.height * 0.62f)
+    drawCloud(cloudC.x, cloudC.y, size.width * 0.72f, size.height * 0.36f, 1.6.dp.toPx())
+    drawFace(cloudC.x, cloudC.y + size.height * 0.02f, size.width * 0.14f, EyeStyle.HalfClosed, MouthStyle.Calm, cheeks = false)
+}
 
 @Composable
 private fun SunWithClouds(modifier: Modifier = Modifier) {
