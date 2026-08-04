@@ -52,6 +52,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
                 context.startActivity(open)
             } else {
                 lastTap = now
+                WeatherScheduler.refreshNow(context)
             }
         }
     }
@@ -131,31 +132,54 @@ class ClockWeatherWidget : AppWidgetProvider() {
                 if (compact) {
                     setViewVisibility(R.id.clock_row, android.view.View.VISIBLE)
                     setViewVisibility(R.id.clock_col, android.view.View.GONE)
-                    setViewVisibility(R.id.alarm_block, android.view.View.GONE)
                     setViewVisibility(R.id.weather_location, android.view.View.GONE)
-                    setViewVisibility(R.id.hourly_container, android.view.View.GONE)
-                    setViewVisibility(R.id.date_row, android.view.View.VISIBLE)
                     setViewVisibility(R.id.date_top, android.view.View.GONE)
                     setViewVisibility(R.id.weather_condition, android.view.View.GONE)
                     setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
+                    setViewVisibility(R.id.weather_uv, android.view.View.GONE)
+                    if (alarms.isNotEmpty()) {
+                        setViewVisibility(R.id.alarm_block, android.view.View.VISIBLE)
+                        setViewVisibility(R.id.alarm_label, android.view.View.VISIBLE)
+                        setTextViewText(
+                            R.id.alarm_label,
+                            context.getString(R.string.alarm_widget_time),
+                        )
+                        setTextViewText(
+                            R.id.alarm_status,
+                            String.format("%02d:%02d", alarms[0].hour, alarms[0].minute),
+                        )
+                    } else {
+                        setViewVisibility(R.id.alarm_block, android.view.View.GONE)
+                    }
+                    if (opts.minHeight >= 40) {
+                        setViewVisibility(R.id.hourly_container, android.view.View.VISIBLE)
+                        renderHourly(this, context, prefs)
+                    } else {
+                        setViewVisibility(R.id.hourly_container, android.view.View.GONE)
+                    }
                 } else {
-                    val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && !small && alarms.isNotEmpty()
-                    val alarmVisibility =
-                        if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE
-                    setViewVisibility(R.id.alarm_block, alarmVisibility)
+                    val showAlarms = prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true) && alarms.isNotEmpty()
+                    setViewVisibility(
+                        R.id.alarm_label,
+                        if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
+                    setViewVisibility(
+                        R.id.alarm_status,
+                        if (showAlarms) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
                     setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
                     setViewVisibility(R.id.weather_temperature, android.view.View.VISIBLE)
                     setViewVisibility(
                         R.id.weather_condition,
-                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                        if (opts.wide4) android.view.View.VISIBLE else android.view.View.GONE,
                     )
                     setViewVisibility(
                         R.id.weather_location,
-                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                        android.view.View.VISIBLE,
                     )
                     setViewVisibility(
                         R.id.weather_uv,
-                        if (wide4) android.view.View.VISIBLE else android.view.View.GONE,
+                        if (opts.wide4) android.view.View.VISIBLE else android.view.View.GONE,
                     )
                     setTextViewText(
                         R.id.weather_uv,
@@ -163,9 +187,8 @@ class ClockWeatherWidget : AppWidgetProvider() {
                     )
                     setViewVisibility(R.id.clock_row, android.view.View.GONE)
                     setViewVisibility(R.id.clock_col, android.view.View.VISIBLE)
-                    setViewVisibility(R.id.date_row, android.view.View.GONE)
                     setViewVisibility(R.id.date_top, android.view.View.VISIBLE)
-                    val timeSp = ((CELL_HEIGHT_DP - 12) / 0.8f).coerceIn(20f, 64f)
+                    val timeSp = 32f
                     setTextViewTextSize(
                         R.id.time_col,
                         android.util.TypedValue.COMPLEX_UNIT_SP,
@@ -205,7 +228,9 @@ class ClockWeatherWidget : AppWidgetProvider() {
             val hourly = prefs.getString(Prefs.WEATHER_HOURLY, null) ?: return
             val now = java.time.LocalTime.now()
             rv.removeAllViews(R.id.hourly_container)
+            var added = 0
             hourly.split("|").forEach { entry ->
+                if (added >= 5) return@forEach
                 val parts = entry.split(";")
                 if (parts.size >= 2) {
                     val entryTime = try {
@@ -222,6 +247,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
                         weatherIconRes(parts.getOrNull(2)?.toIntOrNull() ?: -1),
                     )
                     rv.addView(R.id.hourly_container, item)
+                    added++
                 }
             }
         }

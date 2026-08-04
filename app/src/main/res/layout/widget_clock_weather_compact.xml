@@ -30,7 +30,7 @@
             android:id="@+id/clock_row"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:gravity="center_vertical"
+            android:gravity="center"
             android:orientation="horizontal">
 
             <TextClock
@@ -39,19 +39,20 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="40sp"
-                android:autoSizeMaxTextSize="90sp"
+                android:autoSizeMinTextSize="32sp"
+                android:autoSizeMaxTextSize="60sp"
                 android:autoSizeStepGranularity="1sp"
                 android:ellipsize="none"
+                android:fontFamily="sans-serif-light"
                 android:format12Hour="h:mm"
                 android:format24Hour="HH:mm"
-                android:gravity="center_vertical"
+                android:gravity="center"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:singleLine="true"
                 android:textColor="#FFFFFFFF"
-                android:textSize="60sp"
-                android:textStyle="bold"
+                android:textSize="56sp"
+                android:textStyle="normal"
                 android:shadowColor="#FF000000"
                 android:shadowDx="0"
                 android:shadowDy="0"
@@ -67,8 +68,8 @@
 
                 <ImageView
                     android:id="@+id/weather_icon"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="76dp"
+                    android:layout_height="76dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_weather_cloudy" />
 
@@ -95,7 +96,7 @@
                         android:id="@+id/weather_condition"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="#FFE5E7EB"
+                        android:textColor="#FFFFFFFF"
                         android:textSize="10sp"
                         android:shadowColor="#FF000000"
                         android:shadowDx="0"
@@ -143,45 +144,48 @@
                 android:shadowRadius="3" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/alarm_block"
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/alarm_block"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/alarm_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top|start"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:textColor="#FFFFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:shadowColor="#FF000000"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="2.5" />
 
-            <TextView
-                android:id="@+id/alarm_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FF93C5FD"
-                android:textSize="10sp"
-                android:shadowColor="#FF000000"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="2.5" />
-
-            <TextView
-                android:id="@+id/alarm_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:drawablePadding="4dp"
-                android:textColor="#FF93C5FD"
-                android:textSize="12sp"
-                android:shadowColor="#FF000000"
-                android:shadowDx="0"
-                android:shadowDy="0"
-                android:shadowRadius="2.5" />
-        </LinearLayout>
-    </FrameLayout>
+        <TextView
+            android:id="@+id/alarm_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:drawablePadding="4dp"
+            android:textColor="#FF687127"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:shadowColor="#FFFFFFFF"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="1" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/weather_location"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="end"
-        android:textColor="#FF9CA3AF"
+        android:textColor="#FFFFFFFF"
         android:textSize="9sp"
         android:visibility="gone"
         android:shadowColor="#FF000000"

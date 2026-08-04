@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.Role
@@ -128,6 +129,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
@@ -408,6 +410,29 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                 }
             }
         }
+        LaunchedEffect(Unit) {
+            delay(2_000)
+            val activity = context as? android.app.Activity ?: return@LaunchedEffect
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7001)
+            }
+        }
+        LaunchedEffect(Unit) {
+            delay(4_000)
+            if (!Settings.canDrawOverlays(context)) {
+                requestOverlayPermission(context)
+            }
+        }
+        LaunchedEffect(Unit) {
+            delay(6_000)
+            val pm = context.getSystemService(PowerManager::class.java)
+            if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                requestIgnoreBatteryOptimizations(context)
+            }
+        }
         LaunchedEffect(weatherNeedsRefresh) {
             if (weatherNeedsRefresh) {
                 weatherNeedsRefresh = false
@@ -485,25 +510,14 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 20.dp, bottom = 4.dp),
+                                    .padding(top = 4.dp, bottom = 2.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 LargeClock(
                                     time = rememberClockText(isPreview),
-                                    modifier = Modifier.fillMaxWidth(0.6f),
+                                    modifier = Modifier.fillMaxWidth(0.55f),
                                 )
                             }
-                            DateLabel(
-                                date = if (isPreview) {
-                                    "Saturday, May 18, 2024"
-                                } else {
-                                    LocalDate.now().format(DAY_FORMAT)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            MonthCalendar()
-                            Spacer(Modifier.height(8.dp))
                             CurrentWeatherCard(
                                 location = weather.location,
                                 condition = weather.condition,
@@ -522,6 +536,17 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     toast(context, "Refreshing weather…")
                                 },
                             )
+                            Spacer(Modifier.height(8.dp))
+                            DateLabel(
+                                date = if (isPreview) {
+                                    "Saturday, May 18, 2024"
+                                } else {
+                                    LocalDate.now().format(DAY_FORMAT)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            MonthCalendar()
                             Spacer(Modifier.height(8.dp))
                             AlarmsHeader(onAdd = {
                                 editingAlarmId = null
@@ -674,8 +699,9 @@ private fun permissionStatus(context: Context): String {
         context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
     val battery = context.getSystemService(PowerManager::class.java)
         .isIgnoringBatteryOptimizations(context.packageName)
+    val overlay = Settings.canDrawOverlays(context)
     return "Exact alarms: ${yesNo(exact)} · Notifications: ${yesNo(notifications)}\n" +
-        "Full-screen alerts: ${yesNo(fullScreen)} · Battery: ${yesNo(battery)}"
+        "Full-screen alerts: ${yesNo(fullScreen)} · Battery: ${yesNo(battery)} · Overlay: ${yesNo(overlay)}"
 }
 
 private fun openAlarmPermissions(context: Context) {
@@ -702,9 +728,33 @@ private fun requestIgnoreBatteryOptimizations(context: Context) {
         toast(context, "Battery optimization is already off")
         return
     }
-    context.startActivity(
-        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
-    )
+    try {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${context.packageName}"),
+            ),
+        )
+    } catch (_: Exception) {
+        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    }
+}
+
+private fun requestOverlayPermission(context: Context) {
+    if (Settings.canDrawOverlays(context)) {
+        toast(context, "Overlay permission already granted")
+        return
+    }
+    try {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}"),
+            ),
+        )
+    } catch (_: Exception) {
+        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+    }
 }
 
 private fun requestNotificationPermission(context: Context) {
@@ -1341,11 +1391,17 @@ private fun DateLabel(date: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun MonthCalendar() {
-    val now = if (LocalInspectionMode.current) LocalDate.of(2024, 5, 18) else LocalDate.now()
-    val firstOfMonth = now.withDayOfMonth(1)
-    val daysInMonth = now.lengthOfMonth()
-    val startDow = firstOfMonth.dayOfWeek.value % 7
-    val title = now.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.getDefault()))
+    val context = LocalContext.current
+    val locale = java.util.Locale.getDefault()
+    val firstDayOfWeek = java.time.temporal.WeekFields.of(locale).firstDayOfWeek
+    val today = if (LocalInspectionMode.current) LocalDate.of(2024, 5, 18) else LocalDate.now()
+    val baseYear = 1990
+    val initialPage = (today.year - baseYear) * 12 + today.monthValue - 1
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { 1200 })
+    val scope = rememberCoroutineScope()
+    val currentPage = pagerState.currentPage
+    val displayedYear = currentPage / 12 + baseYear
+    val displayedMonth = (currentPage % 12) + 1
 
     Column(
         modifier = Modifier
@@ -1355,67 +1411,153 @@ private fun MonthCalendar() {
             .handDrawnBorder(cornerRadius = 20.dp)
             .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
-        Text(
-            text = title.replaceFirstChar { it.uppercase() },
-            fontSize = 18.sp,
-            color = OliveDark,
-            fontFamily = FontFamily.Cursive,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        )
-        val dayNames = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            dayNames.forEach {
-                Text(
-                    text = it,
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                    fontFamily = FontFamily.Cursive,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "‹", fontSize = 22.sp, color = OliveDark, fontFamily = FontFamily.Cursive)
+            }
+            val monthTitle = try {
+                LocalDate.of(displayedYear, displayedMonth, 1)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", locale))
+                    .replaceFirstChar { it.uppercase() }
+            } catch (_: Exception) { "" }
+            Text(
+                text = monthTitle,
+                fontSize = 18.sp,
+                color = OliveDark,
+                fontFamily = FontFamily.Cursive,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clickable { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "›", fontSize = 22.sp, color = OliveDark, fontFamily = FontFamily.Cursive)
             }
         }
-        val totalCells = startDow + daysInMonth
-        val weeks = (totalCells + 6) / 7
-        var dayCounter = 1
-        repeat(weeks) { week ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                repeat(7) { col ->
-                    val cellIndex = week * 7 + col
-                    if (cellIndex < startDow || dayCounter > daysInMonth) {
-                        Spacer(Modifier.weight(1f).padding(3.dp))
-                    } else {
-                        val isToday = dayCounter == now.dayOfMonth
+        Spacer(Modifier.height(2.dp))
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            val year = page / 12 + baseYear
+            val month = (page % 12) + 1
+            val daysInMonth = try { YearMonth.of(year, month).lengthOfMonth() } catch (_: Exception) { 0 }
+            if (daysInMonth == 0) return@HorizontalPager
+            val monthStart = LocalDate.of(year, month, 1)
+            val firstOfMonth = monthStart.withDayOfMonth(1)
+            val startDow = (firstOfMonth.dayOfWeek.value - firstDayOfWeek.value + 7) % 7
+            val isCurrentMonth = (year == today.year && month == today.monthValue)
+
+            val dayNames = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+                .let { all -> all.subList(firstDayOfWeek.value - 1, 7) + all.subList(0, firstDayOfWeek.value - 1) }
+            val weekendIndices = listOf(java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY)
+                .map { (it.value - firstDayOfWeek.value + 7) % 7 }
+
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    dayNames.forEachIndexed { idx, name ->
                         Text(
-                            text = "$dayCounter",
-                            fontSize = 14.sp,
-                            color = if (isToday) PaperBackground else TextBrown,
+                            text = name,
+                            fontSize = 11.sp,
+                            color = if (weekendIndices.contains(idx)) Color(0xFFC0392B) else TextMuted,
                             fontFamily = FontFamily.Cursive,
+                            modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(2.dp)
-                                .then(
-                                    if (isToday)
-                                        Modifier.clip(CircleShape).background(OlivePrimary)
-                                    else
-                                        Modifier,
-                                )
-                                .padding(3.dp),
                         )
-                        dayCounter++
+                    }
+                }
+                val totalCells = startDow + daysInMonth
+                val weeks = (totalCells + 6) / 7
+                var dayCounter = 1
+                repeat(weeks) { week ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        repeat(7) { col ->
+                            val cellIndex = week * 7 + col
+                            if (cellIndex < startDow || dayCounter > daysInMonth) {
+                                Spacer(Modifier.weight(1f).padding(3.dp))
+                            } else {
+                                val date = LocalDate.of(year, month, dayCounter)
+                                val isToday = isCurrentMonth && dayCounter == today.dayOfMonth
+                                val isWeekend = weekendIndices.contains(col)
+                                val isHoliday = isCzechHoliday(date)
+                                Text(
+                                    text = "$dayCounter",
+                                    fontSize = 14.sp,
+                                    color = when {
+                                        isToday -> PaperBackground
+                                        isWeekend || isHoliday -> Color(0xFFC0392B)
+                                        else -> TextBrown
+                                    },
+                                    fontFamily = FontFamily.Cursive,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(2.dp)
+                                        .then(
+                                            if (isToday)
+                                                Modifier.clip(CircleShape).background(OlivePrimary)
+                                            else
+                                                Modifier,
+                                        )
+                                        .padding(3.dp),
+                                )
+                                dayCounter++
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun isCzechHoliday(date: LocalDate): Boolean {
+    val (month, day) = date.monthValue to date.dayOfMonth
+    return when ("$month-$day") {
+        "1-1", "5-1", "5-8", "7-5", "7-6", "9-28", "10-28", "11-17", "12-24", "12-25", "12-26" -> true
+        else -> {
+            val easter = computeEasterSunday(date.year)
+            val goodFriday = easter.minusDays(2)
+            val easterMonday = easter.plusDays(1)
+            date == goodFriday || date == easterMonday
+        }
+    }
+}
+
+private fun computeEasterSunday(year: Int): LocalDate {
+    val a = year % 19
+    val b = year / 100
+    val c = year % 100
+    val d = b / 4
+    val e = b % 4
+    val f = (b + 8) / 25
+    val g = (b - f + 1) / 3
+    val h = (19 * a + b - d - g + 15) % 30
+    val i = c / 4
+    val k = c % 4
+    val l = (32 + 2 * e + 2 * i - h - k) % 7
+    val m = (a + 11 * h + 22 * l) / 451
+    val month = (h + l - 7 * m + 114) / 31
+    val day = ((h + l - 7 * m + 114) % 31) + 1
+    return LocalDate.of(year, month, day)
 }
 
 // ---------------------------------------------------------------------------
@@ -3712,6 +3854,16 @@ private fun MoreTabContent(
                 ),
             ) {
                 Text("Disable battery optimization", fontFamily = FontFamily.Cursive)
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { requestOverlayPermission(context) },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = OlivePrimary,
+                    contentColor = PaperWarmTint,
+                ),
+            ) {
+                Text("Allow overlay (top of screen)", fontFamily = FontFamily.Cursive)
             }
         }
     }

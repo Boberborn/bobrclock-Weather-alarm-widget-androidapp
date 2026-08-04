@@ -5,12 +5,13 @@
     android:layout_weight="1"
     android:gravity="center"
     android:orientation="vertical"
-    android:paddingTop="4dp">
+    android:paddingTop="2dp"
+    android:paddingBottom="2dp">
 
     <ImageView
         android:id="@+id/hour_icon"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:contentDescription="@null"
         android:src="@drawable/ic_weather_cloudy" />
 
@@ -19,7 +20,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#FFFFFFFF"
-        android:textSize="14sp"
+        android:textSize="17sp"
+        android:textStyle="bold"
         android:shadowColor="#FF000000"
         android:shadowDx="0"
         android:shadowDy="0"
@@ -30,7 +32,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#FFFFFFFF"
-        android:textSize="18sp"
+        android:textSize="17sp"
         android:textStyle="bold"
         android:shadowColor="#FF000000"
         android:shadowDx="0"
