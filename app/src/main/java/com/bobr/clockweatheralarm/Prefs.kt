@@ -33,6 +33,18 @@ object Prefs {
     const val WEATHER_PRECIPITATION = "weather_precipitation"
     const val WEATHER_VISIBILITY = "weather_visibility"
     const val WEATHER_DEW_POINT = "weather_dew_point"
+    const val COUNTRY_CODE = "country_code"
+    const val WIND_UNIT = "wind_unit"
 
     fun values(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+    fun windUnit(context: Context): String {
+        val stored = values(context).getString(WIND_UNIT, null)
+        if (stored != null) return stored
+        val cc = values(context).getString(COUNTRY_CODE, null)?.uppercase()
+        return if (cc in setOf("US", "GB", "LR", "MM")) "mph" else "kmh"
+    }
+
+    fun windUnitLabel(context: Context): String =
+        if (windUnit(context) == "mph") "mph" else "km/h"
 }

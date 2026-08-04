@@ -31,6 +31,7 @@ class WeatherJobService : JobService() {
             resolveQuery(query)
         } ?: lastKnownLocation(this)?.let { it.first.toString() to it.second.toString() }
         val (latitude, longitude) = coords ?: return false
+        val windUnit = Prefs.windUnit(this)
         val endpoint = URL(
             "https://api.open-meteo.com/v1/forecast" +
                 "?latitude=$latitude&longitude=$longitude" +
@@ -44,7 +45,7 @@ class WeatherJobService : JobService() {
                 "apparent_temperature_max,apparent_temperature_min,sunrise,sunset," +
                 "uv_index_max,precipitation_sum,precipitation_probability_max," +
                 "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant" +
-                "&wind_speed_unit=mph" +
+                "&wind_speed_unit=$windUnit" +
                 "&forecast_days=7&timezone=auto",
         )
         val connection = endpoint.openConnection() as HttpURLConnection
@@ -233,6 +234,10 @@ class WeatherJobService : JobService() {
             val results = JSONObject(body).optJSONArray("results")
             if (results == null || results.length() == 0) return null
             val r = results.getJSONObject(0)
+            val cc = r.optString("country_code", null)
+            if (cc != null) {
+                Prefs.values(this).edit().putString(Prefs.COUNTRY_CODE, cc).apply()
+            }
             r.getDouble("latitude").toString() to r.getDouble("longitude").toString()
         } catch (_: Exception) {
             null

@@ -270,7 +270,7 @@ private const val DemoCondition = "Partly Sunny"
 private const val DemoTemperature = "72°"
 private const val DemoHigh = "76°"
 private const val DemoLow = "54°"
-private const val DemoWind = "5 mph NW"
+private const val DemoWind = "5 km/h NW"
 
 private val DemoWeather = WeatherUiModel(
     location = DemoLocation,
@@ -807,12 +807,14 @@ private fun applyLocation(context: Context, result: JSONObject) {
     val lat = result.getDouble("latitude").toString()
     val lon = result.getDouble("longitude").toString()
     val postcode = result.optString("postcode").ifBlank { null }
-    Prefs.values(context).edit()
+    val cc = result.optString("country_code", null)
+    val editor = Prefs.values(context).edit()
         .putString(Prefs.LOCATION_NAME, cityLabel(result))
         .putString(Prefs.POSTCODE, postcode ?: "")
         .putString(Prefs.LATITUDE, lat)
         .putString(Prefs.LONGITUDE, lon)
-        .apply()
+    if (cc != null) editor.putString(Prefs.COUNTRY_CODE, cc)
+    editor.apply()
     toast(context, "Location saved")
 }
 
@@ -826,21 +828,22 @@ private fun doGpsLocation(context: Context) {
         toast(context, "Location not found. Enable GPS and try again.")
         return
     }
-    val city = try {
+    val geo = try {
         val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
         val addresses = geocoder.getFromLocation(coords.first.toDouble(), coords.second.toDouble(), 1)
-        addresses?.firstOrNull()?.let { addr ->
-            addr.locality ?: addr.subAdminArea ?: addr.adminArea ?: addr.featureName
-        }
+        addresses?.firstOrNull()
     } catch (_: Exception) { null }
+    val city = geo?.let { it.locality ?: it.subAdminArea ?: it.adminArea ?: it.featureName }
         ?: fetchCityFromNominatim(coords.first.toDouble(), coords.second.toDouble())
+    val cc = geo?.countryCode
     val label = city ?: "Your location"
-    Prefs.values(context).edit()
+    val editor = Prefs.values(context).edit()
         .putString(Prefs.LOCATION_NAME, label)
         .remove(Prefs.POSTCODE)
         .putString(Prefs.LATITUDE, coords.first)
         .putString(Prefs.LONGITUDE, coords.second)
-        .apply()
+    if (cc != null) editor.putString(Prefs.COUNTRY_CODE, cc)
+    editor.apply()
     toast(context, "Weather location set to $label")
 }
 
@@ -907,7 +910,7 @@ private fun loadWeatherUi(context: Context): WeatherUiModel {
         high = today?.let { "${it.high}°" } ?: "--°",
         low = today?.let { "${it.low}°" } ?: "--°",
         wind = if (wind >= 0 && windDir >= 0) {
-            "$wind mph ${windCompass(windDir)}"
+            "$wind ${Prefs.windUnitLabel(context)} ${windCompass(windDir)}"
         } else {
             "--"
         },
@@ -968,7 +971,7 @@ private fun loadDayPagesUi(context: Context): List<DayForecastUiModel> {
     val wind = prefs.getInt(Prefs.WEATHER_WIND, -1)
     val windDir = prefs.getInt(Prefs.WEATHER_WIND_DIR, -1)
     val windText = if (wind >= 0 && windDir >= 0) {
-        "$wind mph ${windCompass(windDir)}"
+        "$wind ${Prefs.windUnitLabel(context)} ${windCompass(windDir)}"
     } else {
         "--"
     }
@@ -2299,6 +2302,8 @@ private fun DailyForecastRow(
 
 @Composable
 private fun DailyDetailExpanded(day: DailyDetailUiModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val unit = Prefs.windUnitLabel(context)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2334,13 +2339,13 @@ private fun DailyDetailExpanded(day: DailyDetailUiModel) {
                 if (day.windMax > 0) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Wind max", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
-                        Text("${day.windMax} mph", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                        Text("${day.windMax} $unit", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
                     }
                 }
                 if (day.windGust > 0) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Gusts", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
-                        Text("${day.windGust} mph", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                        Text("${day.windGust} $unit", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
                     }
                 }
                 if (day.precipSum > 0) {
@@ -2443,12 +2448,14 @@ private fun uvCategory(uv: Double): Pair<String, String> = when {
 
 @Composable
 private fun WindDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?, weather: WeatherUiModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val unit = Prefs.windUnitLabel(context)
     val wind = weather.wind
     val gust = currentDetail?.windGust?.takeIf { it > 0 }
     DetailCardBase(modifier = modifier, title = "WIND") {
         Text(wind, fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
         if (gust != null) {
-            Text("Gusts $gust mph", fontSize = 13.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+            Text("Gusts $gust $unit", fontSize = 13.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
         }
         Spacer(Modifier.height(4.dp))
         Canvas(Modifier.size(36.dp)) {
