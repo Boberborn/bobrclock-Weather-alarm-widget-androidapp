@@ -3,8 +3,9 @@
     <style name="Theme.BobrClock" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">@color/primary</item>
-        <item name="android:navigationBarColor">#0F172A</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:navigationBarColor">#7796A4</item>
+        <item name="android:statusBarColor">#7796A4</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#7796A4</item>
     </style>
 </resources>

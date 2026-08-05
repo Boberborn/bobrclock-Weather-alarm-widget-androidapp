@@ -178,7 +178,7 @@ private val Ink = Color(0xFF3E2F22)
 // Models / demo state
 // ---------------------------------------------------------------------------
 
-private enum class InstructionTab { Clock, Alarms, Weather, More }
+private enum class InstructionTab { Clock, Alarms, Weather, Widget, More }
 
 private enum class WeatherType { Clear, PartlyCloudy, Cloudy, Fog, Drizzle, Rain, Snow, Thunderstorm }
 
@@ -630,6 +630,14 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     dailyDetails = loadDailyDetails(context)
                                     hourlyDetails = loadHourlyDetails(context)
                                     weatherCode = Prefs.values(context).getInt(Prefs.WEATHER_CODE, -1)
+                                },
+                            )
+                        }
+                        InstructionTab.Widget -> {
+                            WidgetEditorTab(
+                                context = context,
+                                onChanged = {
+                                    ClockWeatherWidget.updateAll(context)
                                 },
                             )
                         }
@@ -2982,6 +2990,22 @@ private fun TabIcon(tab: InstructionTab, selected: Boolean, modifier: Modifier =
                     sw,
                 )
             }
+            InstructionTab.Widget -> {
+                val c = Offset(size.width / 2f, size.height / 2f)
+                val w = size.width * 0.62f
+                val h = size.height * 0.62f
+                val tl = Offset((size.width - w) / 2f, (size.height - h) / 2f)
+                val corner = CornerRadius(size.width * 0.08f, size.width * 0.08f)
+                drawRoundRect(color, tl, Size(w, h), corner, style = Stroke(sw))
+                val knob = size.width * 0.09f
+                val y1 = tl.y + h * 0.3f
+                val y2 = tl.y + h * 0.5f
+                val y3 = tl.y + h * 0.7f
+                val xs = listOf(tl.x + w * 0.2f, tl.x + w * 0.6f, tl.x + w * 0.4f)
+                listOf(y1, y2, y3).forEachIndexed { i, y ->
+                    drawCircle(color, knob, Offset(xs[i], y))
+                }
+            }
         }
     }
 }
@@ -3871,6 +3895,549 @@ private fun MoreTabContent(
                 ),
             ) {
                 Text("Allow overlay (top of screen)", fontFamily = FontFamily.Cursive)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Widget visual editor
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
+    val prefs = remember(context) { Prefs.values(context) }
+    var rowsState by rememberSaveable { mutableIntStateOf(2) }
+    var colsState by rememberSaveable { mutableIntStateOf(5) }
+    val rows = rowsState.coerceIn(1, 6)
+    val cols = colsState.coerceIn(1, 8)
+    val key = remember(rows, cols) { Prefs.cellKey(rows, cols) }
+    val savedJson = prefs.getString("${Prefs.WIDGET_CONFIG}/$key", null)
+    var config by remember(key) {
+        mutableStateOf(
+            savedJson?.let { Prefs.WidgetConfig.fromJson(it) }
+                ?: Prefs.defaultConfig(rows, cols),
+        )
+    }
+
+    val realSizes: Map<String, Pair<Float, Float>> = remember {
+        val manager = android.appwidget.AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(
+            android.content.ComponentName(context, ClockWeatherWidget::class.java),
+        )
+        val density = context.resources.displayMetrics.density
+        val result = HashMap<String, Pair<Float, Float>>()
+        for (id in ids) {
+            val opts = manager.getAppWidgetOptions(id)
+            var w = 0
+            var h = 0
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val sizes = opts.getParcelableArrayList<android.util.Size>(
+                    android.appwidget.AppWidgetManager.OPTION_APPWIDGET_SIZES,
+                    android.util.Size::class.java,
+                )
+                if (sizes != null && sizes.isNotEmpty()) {
+                    val s = sizes.maxBy { it.width.toLong() * it.height }
+                    w = s.width
+                    h = s.height
+                }
+            }
+            if (w <= 0) {
+                w = opts.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            }
+            if (h <= 0) {
+                h = opts.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            }
+            if (w > 0 && h > 0) {
+                val key = Prefs.cellKeyFromSize(
+                    (w / density).roundToInt(),
+                    (h / density).roundToInt(),
+                )
+                result[key] = (w / density) to (h / density)
+            }
+        }
+        result
+    }
+    val previewSize = realSizes[key] ?: (cols * Prefs.WIDGET_CELL_WIDTH_DP to rows * Prefs.WIDGET_CELL_HEIGHT_DP)
+
+    fun persist(next: Prefs.WidgetConfig) {
+        config = next
+        Prefs.saveWidgetConfig(context, key, next)
+        onChanged()
+    }
+
+    Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Widget size (cells)",
+                fontSize = 15.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            EditorSlider(
+                label = "Height",
+                value = rowsState.toFloat(),
+                range = 1f..6f,
+                onValueChange = { rowsState = it.roundToInt() },
+            )
+            EditorSlider(
+                label = "Width",
+                value = colsState.toFloat(),
+                range = 1f..8f,
+                onValueChange = { colsState = it.roundToInt() },
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+
+    WidgetPreview(
+        config = config,
+        widthDp = previewSize.first,
+        heightDp = previewSize.second,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(10.dp),
+    )
+    Spacer(Modifier.height(10.dp))
+
+    val pagerState = rememberPagerState(initialPage = 0) { 5 }
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxWidth().height(360.dp),
+    ) { page ->
+        Card(modifier = Modifier.fillMaxSize().padding(end = 4.dp)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(14.dp),
+            ) {
+                when (page) {
+                    0 -> {
+                        Text(
+                            text = "Clock",
+                            fontSize = 17.sp,
+                            color = TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                        EditorSlider(
+                            label = "Time size",
+                            value = config.clockSp,
+                            range = 20f..72f,
+                            onValueChange = { persist(config.copy(clockSp = it)) },
+                        )
+                        EditorColorRow(
+                            label = "Time color",
+                            selected = config.clockColor,
+                            onSelect = { persist(config.copy(clockColor = it)) },
+                        )
+                    }
+                    1 -> {
+                        Text(
+                            text = "Weather",
+                            fontSize = 17.sp,
+                            color = TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                        EditorSlider(
+                            label = "Temperature size",
+                            value = config.tempSp,
+                            range = 14f..56f,
+                            onValueChange = { persist(config.copy(tempSp = it)) },
+                        )
+                        EditorSlider(
+                            label = "Condition size",
+                            value = config.condSp,
+                            range = 6f..20f,
+                            onValueChange = { persist(config.copy(condSp = it)) },
+                        )
+                        EditorSlider(
+                            label = "Icon size",
+                            value = config.iconDp,
+                            range = 20f..90f,
+                            onValueChange = { persist(config.copy(iconDp = it)) },
+                        )
+                        EditorColorRow(
+                            label = "Temperature color",
+                            selected = config.tempColor,
+                            onSelect = { persist(config.copy(tempColor = it)) },
+                        )
+                        EditorColorRow(
+                            label = "Condition color",
+                            selected = config.condColor,
+                            onSelect = { persist(config.copy(condColor = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show condition",
+                            checked = config.showCondition,
+                            onToggle = { persist(config.copy(showCondition = it)) },
+                        )
+                    }
+                    2 -> {
+                        Text(
+                            text = "Location & UV",
+                            fontSize = 17.sp,
+                            color = TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                        EditorSlider(
+                            label = "Location size",
+                            value = config.locSp,
+                            range = 6f..20f,
+                            onValueChange = { persist(config.copy(locSp = it)) },
+                        )
+                        EditorSlider(
+                            label = "UV size",
+                            value = config.uvSp,
+                            range = 6f..20f,
+                            onValueChange = { persist(config.copy(uvSp = it)) },
+                        )
+                        EditorColorRow(
+                            label = "Location color",
+                            selected = config.locColor,
+                            onSelect = { persist(config.copy(locColor = it)) },
+                        )
+                        EditorColorRow(
+                            label = "UV color",
+                            selected = config.uvColor,
+                            onSelect = { persist(config.copy(uvColor = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show location",
+                            checked = config.showLocation,
+                            onToggle = { persist(config.copy(showLocation = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show UV",
+                            checked = config.showUv,
+                            onToggle = { persist(config.copy(showUv = it)) },
+                        )
+                    }
+                    3 -> {
+                        Text(
+                            text = "Hourly forecast",
+                            fontSize = 17.sp,
+                            color = TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                        EditorSlider(
+                            label = "Hour time size",
+                            value = config.hourTimeSp,
+                            range = 8f..24f,
+                            onValueChange = { persist(config.copy(hourTimeSp = it)) },
+                        )
+                        EditorSlider(
+                            label = "Hour temp size",
+                            value = config.hourTempSp,
+                            range = 8f..24f,
+                            onValueChange = { persist(config.copy(hourTempSp = it)) },
+                        )
+                        EditorSlider(
+                            label = "Hour icon size",
+                            value = config.hourIconDp,
+                            range = 14f..52f,
+                            onValueChange = { persist(config.copy(hourIconDp = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show hourly forecast",
+                            checked = config.showHourly,
+                            onToggle = { persist(config.copy(showHourly = it)) },
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = "Alarms",
+                            fontSize = 17.sp,
+                            color = TextBrown,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                        EditorSlider(
+                            label = "Alarm size",
+                            value = config.alarmSp,
+                            range = 6f..20f,
+                            onValueChange = { persist(config.copy(alarmSp = it)) },
+                        )
+                        EditorColorRow(
+                            label = "Alarm color",
+                            selected = config.alarmColor,
+                            onSelect = { persist(config.copy(alarmColor = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show alarms",
+                            checked = config.showAlarms,
+                            onToggle = { persist(config.copy(showAlarms = it)) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        repeat(5) { index ->
+            val active = pagerState.currentPage == index
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .size(if (active) 10.dp else 7.dp)
+                    .clip(CircleShape)
+                    .background(if (active) OlivePrimary else DisabledTrack),
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+
+    Button(
+        onClick = {
+            Prefs.resetWidgetConfig(context, key)
+            config = Prefs.defaultConfig(rows, cols)
+            onChanged()
+        },
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = WarmOrange,
+            contentColor = PaperWarmTint,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Reset to default", fontFamily = FontFamily.Cursive)
+    }
+}
+
+@Composable
+private fun EditorSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+) {
+    Column {
+        Text(
+            text = "$label: ${value.roundToInt()}",
+            fontSize = 14.sp,
+            color = TextMuted,
+            fontFamily = FontFamily.Cursive,
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = range,
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = OlivePrimary,
+                activeTrackColor = OlivePrimary,
+            ),
+        )
+    }
+}
+
+private val EditorPalette = listOf(
+    0xFFFFFFFF.toInt() to Color(0xFFFFFFFF),
+    0xFFF4B51D.toInt() to MustardYellow,
+    0xFFEFA527.toInt() to SunOrange,
+    0xFFE47E33.toInt() to WarmOrange,
+    0xFF687127.toInt() to OlivePrimary,
+    0xFF7796A4.toInt() to CloudBlue,
+    0xFF54788D.toInt() to RainBlue,
+    0xFFE98B68.toInt() to CoralCheek,
+    0xFF473527.toInt() to TextBrown,
+)
+
+@Composable
+private fun EditorColorRow(
+    label: String,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Column {
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = TextMuted,
+            fontFamily = FontFamily.Cursive,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            EditorPalette.forEach { (argb, color) ->
+                val isSelected = argb == selected
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .handDrawnBorder(
+                            color = if (isSelected) OlivePrimary else BorderBeige,
+                            cornerRadius = 13.dp,
+                            strokeWidth = if (isSelected) 2.dp else 1.dp,
+                        )
+                        .clickable { onSelect(argb) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorToggle(
+    label: String,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onToggle(!checked) }
+            .padding(horizontal = 2.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = TextBrown,
+            fontFamily = FontFamily.Cursive,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .width(44.dp)
+                .height(24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (checked) OlivePrimary else DisabledTrack),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(PaperWarmTint)
+                    .then(
+                        if (checked) Modifier.offset(x = 20.dp) else Modifier,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WidgetPreview(
+    config: Prefs.WidgetConfig,
+    widthDp: Float,
+    heightDp: Float,
+    modifier: Modifier = Modifier,
+) {
+    val bg = Color(0xFF222B36)
+    Box(
+        modifier = modifier
+            .width(widthDp.dp)
+            .height(heightDp.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .padding(8.dp),
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = rememberClockText(true),
+                        fontSize = config.clockSp.sp,
+                        color = Color(config.clockColor),
+                        fontFamily = FontFamily.SansSerif,
+                        fontWeight = FontWeight.Light,
+                    )
+                    if (config.showHourly) {
+                        Text(
+                            text = "Wed, 05.08",
+                            fontSize = 11.sp,
+                            color = Color(config.clockColor).copy(alpha = 0.85f),
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp),
+                ) {
+                    WeatherIcon(
+                        type = WeatherType.PartlyCloudy,
+                        modifier = Modifier.size(config.iconDp.dp),
+                    )
+                    Column {
+                        Text(
+                            text = "72°",
+                            fontSize = config.tempSp.sp,
+                            color = Color(config.tempColor),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (config.showCondition) {
+                            Text(
+                                text = "Partly cloudy",
+                                fontSize = config.condSp.sp,
+                                color = Color(config.condColor),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+            if (config.showLocation || config.showUv) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Portland",
+                        fontSize = config.locSp.sp,
+                        color = Color(config.locColor),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (config.showUv) {
+                        Text(
+                            text = "UV 4",
+                            fontSize = config.uvSp.sp,
+                            color = Color(config.uvColor),
+                        )
+                    }
+                }
+            }
+            if (config.showHourly) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    listOf("13:00" to "74°", "14:00" to "75°", "15:00" to "76°", "16:00" to "74°", "17:00" to "72°")
+                        .forEach { (t, temp) ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = t,
+                                    fontSize = config.hourTimeSp.sp,
+                                    color = Color(0xFFFFFFFF),
+                                )
+                                Text(
+                                    text = temp,
+                                    fontSize = config.hourTempSp.sp,
+                                    color = Color(0xFFFFFFFF),
+                                )
+                            }
+                        }
+                }
+            }
+            if (config.showAlarms) {
+                Text(
+                    text = "Alarm 07:00",
+                    fontSize = config.alarmSp.sp,
+                    color = Color(config.alarmColor),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
     }
