@@ -55,6 +55,11 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 2. Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk`
 3. **Do NOT commit or push** — only push when the user explicitly says to push to GitHub.
 
+## Device home screen (do NOT touch)
+- The real home-screen widgets (w2/w3/w4) live on the **last home screen, far to the right**.
+- NEVER move, remove, reset, or re-add the home-screen widgets. Do not press-and-hold or enter widget resize/edit mode on the launcher.
+- To check widgets, go HOME then **swipe left until you reach the last (rightmost) screen** — the widgets are there, not on the first page.
+
 ## Ponytail rules (always follow)
 - No abstractions not requested. No new dependencies. Deletion over addition.
 - YAGNI: 1) skip if not needed 2) reuse existing 3) stdlib 4) platform feature 5) installed dep 6) one line 7) minimum that works

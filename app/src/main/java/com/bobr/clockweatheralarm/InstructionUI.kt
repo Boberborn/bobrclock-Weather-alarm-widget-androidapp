@@ -1,4 +1,4 @@
-package com.bobr.clockweatheralarm
+﻿package com.bobr.clockweatheralarm
 
 import android.app.AlarmManager
 import android.content.Context
@@ -21,6 +21,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -49,11 +52,14 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -73,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -82,6 +89,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -178,7 +187,7 @@ private val Ink = Color(0xFF3E2F22)
 // Models / demo state
 // ---------------------------------------------------------------------------
 
-private enum class InstructionTab { Clock, Alarms, Weather, Widget, More }
+private enum class InstructionTab { Clock, Alarms, Weather, Widget, Settings }
 
 private enum class WeatherType { Clear, PartlyCloudy, Cloudy, Fog, Drizzle, Rain, Snow, Thunderstorm }
 
@@ -267,9 +276,9 @@ private data class CurrentDetailUiModel(
 
 private val DemoLocation = "Portland, OR"
 private const val DemoCondition = "Partly Sunny"
-private const val DemoTemperature = "72°"
-private const val DemoHigh = "76°"
-private const val DemoLow = "54°"
+private const val DemoTemperature = "22°C"
+private const val DemoHigh = "24°C"
+private const val DemoLow = "13°C"
 private const val DemoWind = "5 km/h NW"
 
 private val DemoWeather = WeatherUiModel(
@@ -282,12 +291,12 @@ private val DemoWeather = WeatherUiModel(
 )
 
 private val DemoForecast = listOf(
-    ForecastUiModel("SUN", WeatherType.PartlyCloudy, 76, 54),
-    ForecastUiModel("MON", WeatherType.Clear, 78, 55),
-    ForecastUiModel("TUE", WeatherType.Rain, 68, 50),
-    ForecastUiModel("WED", WeatherType.PartlyCloudy, 72, 52),
-    ForecastUiModel("THU", WeatherType.Clear, 77, 53),
-    ForecastUiModel("FRI", WeatherType.Snow, 38, 29),
+    ForecastUiModel("SUN", WeatherType.PartlyCloudy, 24, 13),
+    ForecastUiModel("MON", WeatherType.Clear, 26, 14),
+    ForecastUiModel("TUE", WeatherType.Rain, 20, 10),
+    ForecastUiModel("WED", WeatherType.PartlyCloudy, 22, 11),
+    ForecastUiModel("THU", WeatherType.Clear, 25, 12),
+    ForecastUiModel("FRI", WeatherType.Snow, 3, -2),
 )
 
 private val DemoDayPages = listOf(
@@ -297,17 +306,17 @@ private val DemoDayPages = listOf(
         isToday = true,
         condition = DemoCondition,
         weatherType = WeatherType.PartlyCloudy,
-        high = 76,
-        low = 54,
-        currentTemp = "72°",
+        high = 24,
+        low = 13,
+        currentTemp = "22°C",
         wind = DemoWind,
         hours = listOf(
-            HourUiModel("12:00", 72, 2),
-            HourUiModel("13:00", 74, 2),
-            HourUiModel("14:00", 75, 0),
-            HourUiModel("15:00", 76, 0),
-            HourUiModel("16:00", 74, 2),
-            HourUiModel("17:00", 72, 2),
+            HourUiModel("12:00", 22, 2),
+            HourUiModel("13:00", 23, 2),
+            HourUiModel("14:00", 24, 0),
+            HourUiModel("15:00", 24, 0),
+            HourUiModel("16:00", 23, 2),
+            HourUiModel("17:00", 22, 2),
         ),
     ),
     DayForecastUiModel(
@@ -316,16 +325,16 @@ private val DemoDayPages = listOf(
         isToday = false,
         condition = "Clear sky",
         weatherType = WeatherType.Clear,
-        high = 78,
-        low = 55,
+        high = 26,
+        low = 14,
         currentTemp = null,
         wind = "",
         hours = listOf(
-            HourUiModel("08:00", 57, 0),
-            HourUiModel("11:00", 66, 0),
-            HourUiModel("14:00", 74, 0),
-            HourUiModel("17:00", 78, 0),
-            HourUiModel("20:00", 70, 0),
+            HourUiModel("08:00", 14, 0),
+            HourUiModel("11:00", 19, 0),
+            HourUiModel("14:00", 23, 0),
+            HourUiModel("17:00", 26, 0),
+            HourUiModel("20:00", 21, 0),
         ),
     ),
     DayForecastUiModel(
@@ -334,16 +343,16 @@ private val DemoDayPages = listOf(
         isToday = false,
         condition = "Light rain",
         weatherType = WeatherType.Rain,
-        high = 68,
-        low = 50,
+        high = 20,
+        low = 10,
         currentTemp = null,
         wind = "",
         hours = listOf(
-            HourUiModel("08:00", 52, 61),
-            HourUiModel("11:00", 58, 61),
-            HourUiModel("14:00", 64, 63),
-            HourUiModel("17:00", 68, 63),
-            HourUiModel("20:00", 60, 61),
+            HourUiModel("08:00", 11, 61),
+            HourUiModel("11:00", 14, 61),
+            HourUiModel("14:00", 18, 63),
+            HourUiModel("17:00", 20, 63),
+            HourUiModel("20:00", 16, 61),
         ),
     ),
 )
@@ -499,12 +508,32 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                         .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
+                        .pointerInput(selectedTab) {
+                            var accumulated = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { accumulated = 0f },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    accumulated += dragAmount
+                                    val threshold = 120f
+                                    if (accumulated >= threshold) {
+                                        accumulated = 0f
+                                        val prev = selectedTab.ordinal - 1
+                                        if (prev >= 0) {
+                                            selectedTab = InstructionTab.entries[prev]
+                                        }
+                                    } else if (accumulated <= -threshold) {
+                                        accumulated = 0f
+                                        val next = selectedTab.ordinal + 1
+                                        if (next < InstructionTab.entries.size) {
+                                            selectedTab = InstructionTab.entries[next]
+                                        }
+                                    }
+                                },
+                            )
+                        }
                         .padding(horizontal = 16.dp),
                 ) {
-                    TopControls(
-                        onMenu = { selectedTab = InstructionTab.More },
-                        onSettings = { selectedTab = InstructionTab.More },
-                    )
                     when (selectedTab) {
                         InstructionTab.Clock -> {
                             Box(
@@ -614,7 +643,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                             )
                             Spacer(Modifier.height(16.dp))
                         }
-                        InstructionTab.More -> {
+                        InstructionTab.Settings -> {
                             MoreTabContent(
                                 context = context,
                                 onRefreshNow = {
@@ -914,9 +943,10 @@ private fun loadWeatherUi(context: Context): WeatherUiModel {
     return WeatherUiModel(
         location = location,
         condition = weatherConditionText(prefs.getInt(Prefs.WEATHER_CODE, -1)),
-        temperature = temperature?.let { "$it°" } ?: context.getString(R.string.weather_waiting),
-        high = today?.let { "${it.high}°" } ?: "--°",
-        low = today?.let { "${it.low}°" } ?: "--°",
+        temperature = temperature?.let { Prefs.displayTemp(context, it.toIntOrNull() ?: 0) }
+            ?: context.getString(R.string.weather_waiting),
+        high = today?.let { Prefs.displayTemp(context, it.high) } ?: "--",
+        low = today?.let { Prefs.displayTemp(context, it.low) } ?: "--",
         wind = if (wind >= 0 && windDir >= 0) {
             "$wind ${Prefs.windUnitLabel(context)} ${windCompass(windDir)}"
         } else {
@@ -1009,7 +1039,7 @@ private fun loadDayPagesUi(context: Context): List<DayForecastUiModel> {
             },
             high = daily.high,
             low = daily.low,
-            currentTemp = if (isToday) currentTemp?.let { "$it°" } else null,
+            currentTemp = if (isToday) currentTemp?.let { Prefs.displayTemp(context, it.toIntOrNull() ?: 0) } else null,
             wind = if (isToday) windText else "",
             hours = hourlyByDate[daily.date] ?: emptyList(),
         )
@@ -1019,7 +1049,7 @@ private fun loadDayPagesUi(context: Context): List<DayForecastUiModel> {
 private fun loadCurrentDetail(context: Context): CurrentDetailUiModel {
     val prefs = Prefs.values(context)
     return CurrentDetailUiModel(
-        feelsLike = prefs.getString(Prefs.WEATHER_FEELS_LIKE, null)?.let { "${it}°" } ?: "--°",
+        feelsLike = prefs.getString(Prefs.WEATHER_FEELS_LIKE, null)?.let { Prefs.displayTemp(context, it.toIntOrNull() ?: 0) } ?: "--",
         humidity = prefs.getString(Prefs.WEATHER_HUMIDITY, null)?.toIntOrNull() ?: -1,
         pressure = prefs.getString(Prefs.WEATHER_PRESSURE, null)?.toDoubleOrNull() ?: -1.0,
         cloudCover = prefs.getString(Prefs.WEATHER_CLOUD_COVER, null)?.toIntOrNull() ?: -1,
@@ -1249,113 +1279,11 @@ private fun Modifier.handDrawnBorder(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun TopControls(onMenu: () -> Unit, onSettings: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        MenuIcon(
-            onClick = onMenu,
-            contentDescription = "Open menu",
-        )
-        SettingsIcon(
-            onClick = onSettings,
-            contentDescription = "Open settings",
-        )
-    }
-}
-
-@Composable
 private fun Modifier.olivePress(onClick: () -> Unit): Modifier = this.clickable(
     interactionSource = remember { MutableInteractionSource() },
     indication = androidx.compose.material3.ripple(color = OlivePrimary.copy(alpha = 0.18f)),
     onClick = onClick,
 )
-
-@Composable
-private fun MenuIcon(onClick: () -> Unit, contentDescription: String) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .olivePress(onClick)
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(30.dp)) {
-            val w = size.width
-            val y1 = size.height * 0.22f
-            val y2 = size.height * 0.5f
-            val y3 = size.height * 0.78f
-            val inset = size.width * 0.08f
-            drawLine(
-                color = OlivePrimary,
-                start = Offset(inset, y1),
-                end = Offset(w - inset * 1.3f, y1),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = OlivePrimary,
-                start = Offset(inset * 1.3f, y2),
-                end = Offset(w - inset, y2),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = OlivePrimary,
-                start = Offset(inset, y3),
-                end = Offset(w - inset * 0.8f, y3),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsIcon(onClick: () -> Unit, contentDescription: String) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .olivePress(onClick)
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(30.dp)) {
-            val c = Offset(size.width / 2f, size.height / 2f)
-            val r = size.width * 0.30f
-            val teeth = size.width * 0.16f
-            val sw = 1.8.dp.toPx()
-            repeat(8) { i ->
-                val a = (i * 45f + 11.25f) * (Math.PI / 180.0)
-                val cx = cos(a).toFloat()
-                val sy = sin(a).toFloat()
-                drawLine(
-                    color = OlivePrimary,
-                    start = Offset(c.x + cx * r, c.y + sy * r),
-                    end = Offset(c.x + cx * (r + teeth), c.y + sy * (r + teeth)),
-                    strokeWidth = sw,
-                    cap = StrokeCap.Round,
-                )
-            }
-            drawCircle(
-                color = OlivePrimary,
-                radius = r,
-                center = c,
-                style = Stroke(sw),
-            )
-            drawCircle(
-                color = OlivePrimary,
-                radius = r * 0.42f,
-                center = c,
-                style = Stroke(sw),
-            )
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Clock + date
@@ -1775,6 +1703,7 @@ private fun DayWeatherPage(
     location: String,
     onRefresh: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = page.label,
@@ -1835,7 +1764,7 @@ private fun DayWeatherPage(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = page.currentTemp ?: "${page.high}°",
+                            text = page.currentTemp ?: Prefs.displayTemp(context, page.high),
                             fontSize = 58.sp,
                             color = OlivePrimary,
                             fontFamily = FontFamily.Cursive,
@@ -1845,13 +1774,13 @@ private fun DayWeatherPage(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "H: ${page.high}°",
+                                text = "H: ${Prefs.displayTemp(context, page.high)}",
                                 fontSize = 17.sp,
                                 color = WarmOrange,
                                 fontFamily = FontFamily.Cursive,
                             )
                             Text(
-                                text = "L: ${page.low}°",
+                                text = "L: ${Prefs.displayTemp(context, page.low)}",
                                 fontSize = 17.sp,
                                 color = RainBlue,
                                 fontFamily = FontFamily.Cursive,
@@ -1878,7 +1807,7 @@ private fun DayWeatherPage(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${page.high}°",
+                            text = Prefs.displayTemp(context, page.high),
                             fontSize = 58.sp,
                             color = OlivePrimary,
                             fontFamily = FontFamily.Cursive,
@@ -1888,13 +1817,13 @@ private fun DayWeatherPage(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "H: ${page.high}°",
+                                text = "H: ${Prefs.displayTemp(context, page.high)}",
                                 fontSize = 17.sp,
                                 color = WarmOrange,
                                 fontFamily = FontFamily.Cursive,
                             )
                             Text(
-                                text = "L: ${page.low}°",
+                                text = "L: ${Prefs.displayTemp(context, page.low)}",
                                 fontSize = 17.sp,
                                 color = RainBlue,
                                 fontFamily = FontFamily.Cursive,
@@ -1911,6 +1840,7 @@ private fun DayWeatherPage(
 
 @Composable
 private fun HourlyRow(hours: List<HourUiModel>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     if (hours.isEmpty()) return
     Row(
         modifier = Modifier
@@ -1938,7 +1868,7 @@ private fun HourlyRow(hours: List<HourUiModel>) {
                     )
                     WeatherIcon(weatherType(hour.weatherCode), Modifier.size(32.dp))
                     Text(
-                        text = "${hour.temperature}°",
+                        text = Prefs.displayTemp(context, hour.temperature),
                         fontSize = 16.sp,
                         color = TextBrown,
                         fontFamily = FontFamily.Cursive,
@@ -2166,6 +2096,7 @@ private fun HourlyDayStrip(
     hours: List<HourDetailUiModel>,
     state: LazyListState,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val now = LocalTime.now()
     val snapFling = rememberSnapFlingBehavior(lazyListState = state)
     Column {
@@ -2209,7 +2140,7 @@ private fun HourlyDayStrip(
                             fontWeight = if (isNow && day.isToday) FontWeight.Bold else FontWeight.Normal,
                         )
                         WeatherIcon(weatherType(hour.weatherCode), Modifier.size(30.dp))
-                        Text("${hour.temperature}°", fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
+                        Text(Prefs.displayTemp(context, hour.temperature), fontSize = 15.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
                         if (hour.precipProb > 0) {
                             Text("${hour.precipProb}%", fontSize = 11.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
                         }
@@ -2264,6 +2195,7 @@ private fun DailyForecastRow(
     isExpanded: Boolean,
     onTap: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2285,7 +2217,7 @@ private fun DailyForecastRow(
         } else {
             Spacer(Modifier.width(36.dp))
         }
-        Text("${day.low}°", fontSize = 14.sp, color = RainBlue, fontFamily = FontFamily.Cursive, modifier = Modifier.width(32.dp), textAlign = TextAlign.End)
+        Text(Prefs.displayTemp(context, day.low), fontSize = 14.sp, color = RainBlue, fontFamily = FontFamily.Cursive, modifier = Modifier.width(40.dp), textAlign = TextAlign.End)
         Box(
             modifier = Modifier
                 .width(60.dp)
@@ -2304,7 +2236,7 @@ private fun DailyForecastRow(
                     .background(if (day.isToday) OlivePrimary else CoralCheek),
             )
         }
-        Text("${day.high}°", fontSize = 14.sp, color = WarmOrange, fontFamily = FontFamily.Cursive, modifier = Modifier.width(32.dp), textAlign = TextAlign.Start)
+        Text(Prefs.displayTemp(context, day.high), fontSize = 14.sp, color = WarmOrange, fontFamily = FontFamily.Cursive, modifier = Modifier.width(40.dp), textAlign = TextAlign.Start)
     }
 }
 
@@ -2475,6 +2407,7 @@ private fun WindDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiMod
 
 @Composable
 private fun HumidityDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val h = currentDetail?.humidity?.takeIf { it >= 0 }
     DetailCardBase(modifier = modifier, title = "HUMIDITY") {
         if (h == null) { Text("No data", fontSize = 15.sp, color = TextMuted, fontFamily = FontFamily.Cursive); return@DetailCardBase }
@@ -2482,7 +2415,7 @@ private fun HumidityDetailCard(modifier: Modifier, currentDetail: CurrentDetailU
         val label = when { h < 30 -> "Dry"; h < 55 -> "Comfortable"; h < 75 -> "Humid"; else -> "Very humid" }
         Text(label, fontSize = 13.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
         if (currentDetail.dewPoint > -900) {
-            Text("Dew point ${currentDetail.dewPoint.toInt()}°", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+            Text("Dew point ${Prefs.displayTemp(context, currentDetail.dewPoint.toInt())}", fontSize = 11.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
         }
     }
 }
@@ -2556,8 +2489,9 @@ private fun PrecipitationDetailCard(modifier: Modifier, currentDetail: CurrentDe
 
 @Composable
 private fun DewPointDetailCard(modifier: Modifier, currentDetail: CurrentDetailUiModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     DetailCardBase(modifier = modifier, title = "DEW POINT") {
-        Text("${currentDetail.dewPoint.toInt()}°", fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
+        Text(Prefs.displayTemp(context, currentDetail.dewPoint.toInt()), fontSize = 26.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -2601,6 +2535,7 @@ private fun ForecastCard(forecast: List<ForecastUiModel>) {
 
 @Composable
 private fun ForecastDayCell(day: ForecastUiModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(
         modifier = Modifier.width(70.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -2614,13 +2549,13 @@ private fun ForecastDayCell(day: ForecastUiModel) {
         )
         WeatherIcon(day.weatherType, Modifier.size(34.dp))
         Text(
-            text = "${day.high}°",
+            text = Prefs.displayTemp(context, day.high),
             fontSize = 18.sp,
             color = TextBrown,
             fontFamily = FontFamily.Cursive,
         )
         Text(
-            text = "${day.low}°",
+            text = Prefs.displayTemp(context, day.low),
             fontSize = 16.sp,
             color = RainBlue,
             fontFamily = FontFamily.Cursive,
@@ -2971,7 +2906,7 @@ private fun TabIcon(tab: InstructionTab, selected: Boolean, modifier: Modifier =
                 val cloudC = Offset(size.width * 0.4f, size.height * 0.62f)
                 drawCloud(cloudC.x, cloudC.y, size.width * 0.7f, size.height * 0.4f, sw)
             }
-            InstructionTab.More -> {
+            InstructionTab.Settings -> {
                 val w = size.width * 0.6f
                 val h = size.height * 0.6f
                 val tl = Offset((size.width - w) / 2f, (size.height - h) / 2f)
@@ -3657,12 +3592,17 @@ private fun MoreTabContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val permissionStatusText = remember(statusTick) { permissionStatus(context) }
+    var logTick by remember { mutableIntStateOf(0) }
+    val alarmLogEntries = remember(logTick, statusTick) { AlarmLog.entries(context) }
 
     var locationQuery by remember {
         mutableStateOf(prefs.getString(Prefs.LOCATION_NAME, "") ?: "")
     }
     var widgetShowAlarms by remember {
         mutableStateOf(prefs.getBoolean(Prefs.WIDGET_SHOW_ALARMS, true))
+    }
+    var tempIsFahrenheit by remember {
+        mutableStateOf(Prefs.tempIsFahrenheit(context))
     }
     fun reloadWeather() {
         onWeatherStateReload()
@@ -3816,6 +3756,50 @@ private fun MoreTabContent(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
+                        text = "Temperature unit",
+                        fontSize = 17.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Show temperatures in °C or °F.",
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !tempIsFahrenheit,
+                        onClick = {
+                            tempIsFahrenheit = false
+                            prefs.edit().putString(Prefs.TEMP_UNIT, "C").apply()
+                            ClockWeatherWidget.updateAll(context)
+                            reloadWeather()
+                        },
+                        label = { Text("°C") },
+                    )
+                    FilterChip(
+                        selected = tempIsFahrenheit,
+                        onClick = {
+                            tempIsFahrenheit = true
+                            prefs.edit().putString(Prefs.TEMP_UNIT, "F").apply()
+                            ClockWeatherWidget.updateAll(context)
+                            reloadWeather()
+                        },
+                        label = { Text("°F") },
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
                         text = "Show alarms on widget",
                         fontSize = 17.sp,
                         color = TextBrown,
@@ -3898,6 +3882,62 @@ private fun MoreTabContent(
             }
         }
     }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Alarm log",
+                        fontSize = 17.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Schedule, fire and stop events for troubleshooting.",
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+                TextButton(onClick = { AlarmLog.clear(context); logTick++ }) {
+                    Text("Clear", color = OlivePrimary, fontFamily = FontFamily.Cursive)
+                }
+                TextButton(onClick = { AlarmScheduler.scheduleAll(context); logTick++ }) {
+                    Text("Reschedule", color = OlivePrimary, fontFamily = FontFamily.Cursive)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (alarmLogEntries.isEmpty()) {
+                Text(
+                    text = "No alarm events recorded yet.",
+                    fontSize = 14.sp,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Cursive,
+                )
+            } else {
+                Column {
+                    alarmLogEntries.forEach { entry ->
+                        Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Text(
+                                text = AlarmLog.formatTime(entry.time),
+                                fontSize = 12.sp,
+                                color = TextMuted,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                            Text(
+                                text = entry.message,
+                                fontSize = 14.sp,
+                                color = TextBrown,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3907,11 +3947,9 @@ private fun MoreTabContent(
 @Composable
 private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
     val prefs = remember(context) { Prefs.values(context) }
-    var rowsState by rememberSaveable { mutableIntStateOf(2) }
-    var colsState by rememberSaveable { mutableIntStateOf(5) }
-    val rows = rowsState.coerceIn(1, 6)
-    val cols = colsState.coerceIn(1, 8)
-    val key = remember(rows, cols) { Prefs.cellKey(rows, cols) }
+    val rows = Prefs.PREVIEW_ROWS
+    var cols by remember { mutableIntStateOf(Prefs.previewCols(context)) }
+    val key = Prefs.cellKey(rows, cols)
     val savedJson = prefs.getString("${Prefs.WIDGET_CONFIG}/$key", null)
     var config by remember(key) {
         mutableStateOf(
@@ -3920,45 +3958,7 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
         )
     }
 
-    val realSizes: Map<String, Pair<Float, Float>> = remember {
-        val manager = android.appwidget.AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(
-            android.content.ComponentName(context, ClockWeatherWidget::class.java),
-        )
-        val density = context.resources.displayMetrics.density
-        val result = HashMap<String, Pair<Float, Float>>()
-        for (id in ids) {
-            val opts = manager.getAppWidgetOptions(id)
-            var w = 0
-            var h = 0
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                val sizes = opts.getParcelableArrayList<android.util.Size>(
-                    android.appwidget.AppWidgetManager.OPTION_APPWIDGET_SIZES,
-                    android.util.Size::class.java,
-                )
-                if (sizes != null && sizes.isNotEmpty()) {
-                    val s = sizes.maxBy { it.width.toLong() * it.height }
-                    w = s.width
-                    h = s.height
-                }
-            }
-            if (w <= 0) {
-                w = opts.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
-            }
-            if (h <= 0) {
-                h = opts.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-            }
-            if (w > 0 && h > 0) {
-                val key = Prefs.cellKeyFromSize(
-                    (w / density).roundToInt(),
-                    (h / density).roundToInt(),
-                )
-                result[key] = (w / density) to (h / density)
-            }
-        }
-        result
-    }
-    val previewSize = realSizes[key] ?: (cols * Prefs.WIDGET_CELL_WIDTH_DP to rows * Prefs.WIDGET_CELL_HEIGHT_DP)
+    val previewSize = cols * Prefs.WIDGET_REAL_CELL_WIDTH_DP to rows * Prefs.WIDGET_REAL_CELL_HEIGHT_DP
 
     fun persist(next: Prefs.WidgetConfig) {
         config = next
@@ -3966,38 +3966,48 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
         onChanged()
     }
 
-    Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Column(Modifier.padding(14.dp)) {
-            Text(
-                text = "Widget size (cells)",
-                fontSize = 15.sp,
-                color = TextBrown,
-                fontFamily = FontFamily.Cursive,
-            )
-            EditorSlider(
-                label = "Height",
-                value = rowsState.toFloat(),
-                range = 1f..6f,
-                onValueChange = { rowsState = it.roundToInt() },
-            )
-            EditorSlider(
-                label = "Width",
-                value = colsState.toFloat(),
-                range = 1f..8f,
-                onValueChange = { colsState = it.roundToInt() },
-            )
-        }
+    fun persistCols(next: Int) {
+        cols = next.coerceIn(2, 5)
+        Prefs.savePreviewCols(context, cols)
+        onChanged()
     }
-    Spacer(Modifier.height(10.dp))
 
-    WidgetPreview(
-        config = config,
-        widthDp = previewSize.first,
-        heightDp = previewSize.second,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(10.dp),
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .requiredWidth(previewSize.first.dp)
+                .requiredHeight(previewSize.second.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF222B36)),
+        ) {
+            key(config to cols) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        val rv = ClockWeatherWidget.renderPreview(ctx, cols, rows)
+                        rv.apply(ctx, null)
+                    },
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            EditorSlider(
+                label = "Width",
+                value = cols.toFloat(),
+                range = 1f..5f,
+                onValueChange = { persistCols(it.roundToInt()) },
+                startInset = 0.dp,
+            )
+        }
+    }
     Spacer(Modifier.height(10.dp))
 
     val pagerState = rememberPagerState(initialPage = 0) { 5 }
@@ -4026,6 +4036,32 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
                             range = 20f..72f,
                             onValueChange = { persist(config.copy(clockSp = it)) },
                         )
+                        EditorSlider(
+                            label = "Date size",
+                            value = config.dateSp,
+                            range = 8f..20f,
+                            onValueChange = { persist(config.copy(dateSp = it)) },
+                        )
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                persist(
+                                    config.copy(
+                                        swapTimeDate = !config.swapTimeDate,
+                                        clockSp = config.dateSp,
+                                        dateSp = config.clockSp,
+                                    ),
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                        ) {
+                            Text(
+                                text = if (config.swapTimeDate) "Swap time/date (time on top)" else "Swap time/date (date on top)",
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Cursive,
+                            )
+                        }
                         EditorColorRow(
                             label = "Time color",
                             selected = config.clockColor,
@@ -4054,8 +4090,13 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
                         EditorSlider(
                             label = "Icon size",
                             value = config.iconDp,
-                            range = 20f..90f,
+                            range = 50f..200f,
                             onValueChange = { persist(config.copy(iconDp = it)) },
+                        )
+                        EditorToggle(
+                            label = "Show icon",
+                            checked = config.showIcon,
+                            onToggle = { persist(config.copy(showIcon = it)) },
                         )
                         EditorColorRow(
                             label = "Temperature color",
@@ -4135,7 +4176,7 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
                         EditorSlider(
                             label = "Hour icon size",
                             value = config.hourIconDp,
-                            range = 14f..52f,
+                            range = 20f..200f,
                             onValueChange = { persist(config.copy(hourIconDp = it)) },
                         )
                         EditorToggle(
@@ -4212,11 +4253,12 @@ private fun EditorSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
+    startInset: Dp = 8.dp,
 ) {
     Column {
         Text(
             text = "$label: ${value.roundToInt()}",
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             color = TextMuted,
             fontFamily = FontFamily.Cursive,
         )
@@ -4224,7 +4266,10 @@ private fun EditorSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = range,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(28.dp)
+                .padding(start = startInset),
             colors = androidx.compose.material3.SliderDefaults.colors(
                 thumbColor = OlivePrimary,
                 activeTrackColor = OlivePrimary,
@@ -4322,123 +4367,6 @@ private fun EditorToggle(
                         if (checked) Modifier.offset(x = 20.dp) else Modifier,
                     ),
             )
-        }
-    }
-}
-
-@Composable
-private fun WidgetPreview(
-    config: Prefs.WidgetConfig,
-    widthDp: Float,
-    heightDp: Float,
-    modifier: Modifier = Modifier,
-) {
-    val bg = Color(0xFF222B36)
-    Box(
-        modifier = modifier
-            .width(widthDp.dp)
-            .height(heightDp.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .padding(8.dp),
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = rememberClockText(true),
-                        fontSize = config.clockSp.sp,
-                        color = Color(config.clockColor),
-                        fontFamily = FontFamily.SansSerif,
-                        fontWeight = FontWeight.Light,
-                    )
-                    if (config.showHourly) {
-                        Text(
-                            text = "Wed, 05.08",
-                            fontSize = 11.sp,
-                            color = Color(config.clockColor).copy(alpha = 0.85f),
-                        )
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 4.dp),
-                ) {
-                    WeatherIcon(
-                        type = WeatherType.PartlyCloudy,
-                        modifier = Modifier.size(config.iconDp.dp),
-                    )
-                    Column {
-                        Text(
-                            text = "72°",
-                            fontSize = config.tempSp.sp,
-                            color = Color(config.tempColor),
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (config.showCondition) {
-                            Text(
-                                text = "Partly cloudy",
-                                fontSize = config.condSp.sp,
-                                color = Color(config.condColor),
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
-            if (config.showLocation || config.showUv) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Portland",
-                        fontSize = config.locSp.sp,
-                        color = Color(config.locColor),
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (config.showUv) {
-                        Text(
-                            text = "UV 4",
-                            fontSize = config.uvSp.sp,
-                            color = Color(config.uvColor),
-                        )
-                    }
-                }
-            }
-            if (config.showHourly) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    listOf("13:00" to "74°", "14:00" to "75°", "15:00" to "76°", "16:00" to "74°", "17:00" to "72°")
-                        .forEach { (t, temp) ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = t,
-                                    fontSize = config.hourTimeSp.sp,
-                                    color = Color(0xFFFFFFFF),
-                                )
-                                Text(
-                                    text = temp,
-                                    fontSize = config.hourTempSp.sp,
-                                    color = Color(0xFFFFFFFF),
-                                )
-                            }
-                        }
-                }
-            }
-            if (config.showAlarms) {
-                Text(
-                    text = "Alarm 07:00",
-                    fontSize = config.alarmSp.sp,
-                    color = Color(config.alarmColor),
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
         }
     }
 }

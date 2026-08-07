@@ -42,13 +42,17 @@ class AlarmActivity : ComponentActivity() {
             AlarmRingScreen(
                 title = getString(R.string.alarm_ringing),
                 onSnooze = {
+                    AlarmLog.log(this, "snoozed from alarm screen (5 min)")
                     if (AlarmScheduler.scheduleSnooze(this, soundUri, soundName)) {
                         stopRinging()
                     } else {
                         Toast.makeText(this, R.string.exact_alarm_required, Toast.LENGTH_LONG).show()
                     }
                 },
-                onStop = { stopRinging() },
+                onStop = {
+                    AlarmLog.log(this, "alarm stopped from alarm screen")
+                    stopRinging()
+                },
             )
         }
     }

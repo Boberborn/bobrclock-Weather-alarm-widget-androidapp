@@ -37,14 +37,32 @@ object Prefs {
     const val WEATHER_DEW_POINT = "weather_dew_point"
     const val COUNTRY_CODE = "country_code"
     const val WIND_UNIT = "wind_unit"
+    const val TEMP_UNIT = "temp_unit"
     const val WIDGET_CONFIG = "widget_config"
 
     const val WIDGET_CELL_WIDTH_DP = 63f
     const val WIDGET_CELL_HEIGHT_DP = 34f
 
+    const val WIDGET_REAL_CELL_WIDTH_DP = 63f
+    const val WIDGET_REAL_CELL_HEIGHT_DP = 113f
+
+    const val PREVIEW_ROWS = 2
+    const val PREVIEW_COLS = 5
+    const val PREVIEW_KEY = "2x5"
+    const val PREVIEW_COLS_PREF = "preview_cols"
+
+    fun previewCols(context: Context): Int =
+        values(context).getInt(PREVIEW_COLS_PREF, PREVIEW_COLS)
+
+    fun savePreviewCols(context: Context, cols: Int) {
+        values(context).edit().putInt(PREVIEW_COLS_PREF, cols).apply()
+    }
+
     data class WidgetConfig(
         val clockSp: Float = 32f,
         val clockColor: Int = 0xFFFFFFFF.toInt(),
+        val dateSp: Float = 11f,
+        val swapTimeDate: Boolean = false,
         val tempSp: Float = 28f,
         val tempColor: Int = 0xFFFFFFFF.toInt(),
         val condSp: Float = 9f,
@@ -53,10 +71,11 @@ object Prefs {
         val locColor: Int = 0xFFFFFFFF.toInt(),
         val uvSp: Float = 8f,
         val uvColor: Int = 0xFFFFFFFF.toInt(),
-        val iconDp: Float = 40f,
-        val hourTimeSp: Float = 17f,
-        val hourTempSp: Float = 17f,
-        val hourIconDp: Float = 36f,
+        val iconDp: Float = 60f,
+        val showIcon: Boolean = true,
+        val hourTimeSp: Float = 18f,
+        val hourTempSp: Float = 18f,
+        val hourIconDp: Float = 120f,
         val alarmSp: Float = 9f,
         val alarmColor: Int = 0xFFFFFFFF.toInt(),
         val showLocation: Boolean = true,
@@ -68,6 +87,8 @@ object Prefs {
         fun toJson(): String = JSONObject()
             .put("clockSp", clockSp.toDouble())
             .put("clockColor", clockColor.toLong())
+            .put("dateSp", dateSp.toDouble())
+            .put("swapTimeDate", swapTimeDate)
             .put("tempSp", tempSp.toDouble())
             .put("tempColor", tempColor.toLong())
             .put("condSp", condSp.toDouble())
@@ -77,6 +98,7 @@ object Prefs {
             .put("uvSp", uvSp.toDouble())
             .put("uvColor", uvColor.toLong())
             .put("iconDp", iconDp.toDouble())
+            .put("showIcon", showIcon)
             .put("hourTimeSp", hourTimeSp.toDouble())
             .put("hourTempSp", hourTempSp.toDouble())
             .put("hourIconDp", hourIconDp.toDouble())
@@ -95,6 +117,8 @@ object Prefs {
                 WidgetConfig(
                     clockSp = o.optDouble("clockSp", 32.0).toFloat(),
                     clockColor = o.optLong("clockColor", 0xFFFFFFFFL).toInt(),
+                    dateSp = o.optDouble("dateSp", 11.0).toFloat(),
+                    swapTimeDate = o.optBoolean("swapTimeDate", false),
                     tempSp = o.optDouble("tempSp", 28.0).toFloat(),
                     tempColor = o.optLong("tempColor", 0xFFFFFFFFL).toInt(),
                     condSp = o.optDouble("condSp", 9.0).toFloat(),
@@ -104,9 +128,10 @@ object Prefs {
                     uvSp = o.optDouble("uvSp", 8.0).toFloat(),
                     uvColor = o.optLong("uvColor", 0xFFFFFFFFL).toInt(),
                     iconDp = o.optDouble("iconDp", 40.0).toFloat(),
-                    hourTimeSp = o.optDouble("hourTimeSp", 17.0).toFloat(),
-                    hourTempSp = o.optDouble("hourTempSp", 17.0).toFloat(),
-                    hourIconDp = o.optDouble("hourIconDp", 36.0).toFloat(),
+                    showIcon = o.optBoolean("showIcon", true),
+                    hourTimeSp = o.optDouble("hourTimeSp", 9.0).toFloat(),
+                    hourTempSp = o.optDouble("hourTempSp", 9.0).toFloat(),
+                    hourIconDp = o.optDouble("hourIconDp", 60.0).toFloat(),
                     alarmSp = o.optDouble("alarmSp", 9.0).toFloat(),
                     alarmColor = o.optLong("alarmColor", 0xFFFFFFFFL).toInt(),
                     showLocation = o.optBoolean("showLocation", true),
@@ -141,15 +166,23 @@ object Prefs {
         return when {
             rows < 2 -> WidgetConfig(
                 clockSp = 32f, tempSp = 28f, condSp = 9f, locSp = 8f, uvSp = 8f,
-                iconDp = 40f, showHourly = false,
+                iconDp = 60f, showHourly = false,
             )
-            narrow -> WidgetConfig(
-                clockSp = 28f, tempSp = 24f, condSp = 9f, locSp = 8f, uvSp = 8f,
-                iconDp = 34f, showCondition = false, showUv = false, showHourly = false,
+            cols == 2 -> WidgetConfig(
+                clockSp = 23f, tempSp = 20f, condSp = 9f, locSp = 8f, uvSp = 8f,
+                iconDp = 53f, showCondition = true, showUv = true, showLocation = false, showHourly = true,
+            )
+            cols == 3 -> WidgetConfig(
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                iconDp = 125f, showCondition = true, showUv = true, showLocation = true, showHourly = true,
+            )
+            cols == 4 -> WidgetConfig(
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                iconDp = 152f, showCondition = true, showUv = true, showLocation = true, showHourly = true,
             )
             else -> WidgetConfig(
-                clockSp = 32f, tempSp = 28f, condSp = 9f, locSp = 8f, uvSp = 8f,
-                iconDp = 40f, showHourly = true,
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                iconDp = 166f, showUv = true, showLocation = true, showHourly = true,
             )
         }
     }
@@ -174,6 +207,15 @@ object Prefs {
         values(context).edit().remove("$WIDGET_CONFIG/$key").apply()
     }
 
+    fun clearWidgetConfigs(context: Context, keepKey: String? = null) {
+        val editor = values(context).edit()
+        val all = values(context).all.keys.filter {
+            it.startsWith("$WIDGET_CONFIG/") && it != "$WIDGET_CONFIG/$keepKey"
+        }
+        for (k in all) editor.remove(k)
+        editor.apply()
+    }
+
     fun values(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
     fun windUnit(context: Context): String {
@@ -185,4 +227,23 @@ object Prefs {
 
     fun windUnitLabel(context: Context): String =
         if (windUnit(context) == "mph") "mph" else "km/h"
+
+    fun tempIsFahrenheit(context: Context): Boolean {
+        val stored = values(context).getString(TEMP_UNIT, null)
+        if (stored != null) return stored == "F"
+        val cc = values(context).getString(COUNTRY_CODE, null)?.uppercase()
+        return cc in setOf("US", "GB", "LR", "MM")
+    }
+
+    fun tempLabel(context: Context): String =
+        if (tempIsFahrenheit(context)) "°F" else "°C"
+
+    fun displayTemp(context: Context, celsius: Int): String {
+        val value = if (tempIsFahrenheit(context)) {
+            (celsius * 9f / 5f + 32f).roundToInt()
+        } else {
+            celsius
+        }
+        return "$value${tempLabel(context)}"
+    }
 }

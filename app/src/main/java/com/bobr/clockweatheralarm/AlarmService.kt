@@ -30,6 +30,7 @@ class AlarmService : Service() {
             return START_NOT_STICKY
         }
 
+        AlarmLog.log(this, "alarm ringing started")
         soundName = intent?.getStringExtra(AlarmScheduler.EXTRA_SOUND_NAME)
             ?.ifBlank { "Default alarm" }
             ?: "Default alarm"
@@ -171,6 +172,7 @@ class AlarmService : Service() {
     }
 
     private fun stopAlarm() {
+        AlarmLog.log(this, "alarm stopped")
         player?.release()
         player = null
         vibrator?.cancel()

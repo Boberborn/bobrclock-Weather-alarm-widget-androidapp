@@ -19,10 +19,10 @@ object AlarmScheduler {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
             return false
         }
-        return AlarmStore.load(context)
-            .filter { it.enabled && it.daysMask != 0 }
-            .all { schedule(context, it) }
-            .also { ClockWeatherWidget.updateAll(context) }
+        val enabled = AlarmStore.load(context).filter { it.enabled && it.daysMask != 0 }
+        val result = enabled.all { schedule(context, it) }
+        ClockWeatherWidget.updateAll(context)
+        return result
     }
 
     fun scheduleById(context: Context, id: Int): Boolean {
@@ -51,9 +51,10 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val next = AlarmStore.nextTrigger(alarm)
         return try {
             manager.setAlarmClock(
-                AlarmManager.AlarmClockInfo(AlarmStore.nextTrigger(alarm), showIntent),
+                AlarmManager.AlarmClockInfo(next, showIntent),
                 alarmIntent,
             )
             ClockWeatherWidget.updateAll(context)

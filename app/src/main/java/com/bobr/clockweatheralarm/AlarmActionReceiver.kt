@@ -7,6 +7,7 @@ import android.content.Intent
 class AlarmActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_SNOOZE) {
+            AlarmLog.log(context, "snoozed (5 min)")
             AlarmScheduler.scheduleSnooze(
                 context,
                 intent.getStringExtra(AlarmScheduler.EXTRA_SOUND_URI),
