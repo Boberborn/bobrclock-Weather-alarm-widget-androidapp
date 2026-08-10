@@ -41,7 +41,15 @@ All sizes: `maxHeight ≥ 65 dp → hourly shown`, `compact = false`.
 
 ## Expected memory
 
-The app normally has no process while idle. A cached process is expected to use roughly 20–40 MB, a weather refresh roughly 25–60 MB for a few seconds, and an active alarm roughly 20–40 MB. Device firmware and Android version affect these figures.
+Measured on a 4 GB Realme phone (Android 16):
+
+| State | PSS | RSS |
+|-------|-----|-----|
+| Closed (force-stopped) | 0 MB | 0 MB |
+| Background (cached) | ~111 MB | ~185 MB |
+| Foreground (idle) | ~123 MB | ~188 MB |
+
+The app normally has no process while idle: when closed, it uses zero memory — the widget renders via `TextClock` and alarms live in the system's `AlarmManager`, both without an app process. A cached background process (after closing the app normally) uses ~111 MB PSS and is reclaimed by the system under memory pressure. Device firmware and Android version affect these figures.
 
 ## Build
 
