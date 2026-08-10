@@ -2,6 +2,11 @@ package com.bobr.clockweatheralarm
 
 import android.app.job.JobParameters
 import android.app.job.JobService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.location.LocationManager
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -13,6 +18,7 @@ class WeatherJobService : JobService() {
         Thread {
             val success = refreshWeather()
             ClockWeatherWidget.updateAll(this)
+            if (success) postWeatherAlert()
             jobFinished(params, !success)
             if (params.jobId == WeatherScheduler.SCHEDULED_JOB_ID && success) {
                 WeatherScheduler.scheduleNext(this)
@@ -208,6 +214,55 @@ class WeatherJobService : JobService() {
         return try { arr.getDouble(idx).toInt() } catch (_: Exception) { fallback }
     }
 
+    private fun postWeatherAlert() {
+        if (!Prefs.weatherAlertsEnabled(this)) return
+        val prefs = Prefs.values(this)
+        val daily = prefs.getString(Prefs.WEATHER_DAILY, null) ?: return
+        val today = java.time.LocalDate.now().toString()
+        var alertTitle: String? = null
+        for (entry in daily.split("|")) {
+            val parts = entry.split(";")
+            if (parts.size < 2) continue
+            if (parts[0] != today) continue
+            val code = parts[1].toIntOrNull() ?: continue
+            val temp = parts.getOrNull(3)?.toIntOrNull()
+            alertTitle = when {
+                code in 71..86 -> "Snow expected today"
+                code in 95..99 -> "Thunderstorm expected today"
+                code in 61..67 || code in 80..82 -> "Rain expected today"
+                code == 0 && temp != null && temp >= 33 -> "Very hot today"
+                temp != null && temp <= 0 -> "Freezing today"
+                else -> null
+            }
+            if (alertTitle != null) break
+        }
+        if (alertTitle == null) return
+        val manager = getSystemService(NotificationManager::class.java)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Weather alerts",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply { description = "Rain, snow, storm and temperature alerts" }
+        manager.createNotificationChannel(channel)
+        val open = PendingIntent.getActivity(
+            this,
+            4601,
+            Intent(this, InstructionActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("tab", "weather"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val location = prefs.getString(Prefs.LOCATION_NAME, null)?.substringBefore(",")?.trim() ?: "Weather"
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle(alertTitle)
+            .setContentText("$location — tap to view the forecast.")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        manager.notify(NOTIFICATION_ID, notification)
+    }
+
     private fun optDoubleStr(arr: org.json.JSONArray?, idx: Int): String {
         if (arr == null || idx >= arr.length()) return ""
         return try { arr.getDouble(idx).toString() } catch (_: Exception) { "" }
@@ -247,6 +302,9 @@ class WeatherJobService : JobService() {
     }
 
     companion object {
+        private const val CHANNEL_ID = "weather_alerts"
+        private const val NOTIFICATION_ID = 4601
+
         fun lastKnownLocation(context: android.content.Context): Pair<String, String>? {
             val manager = context.getSystemService(LocationManager::class.java)
             return listOf(

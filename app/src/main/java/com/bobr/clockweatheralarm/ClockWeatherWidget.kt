@@ -271,17 +271,29 @@ setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
             val sp = android.util.TypedValue.COMPLEX_UNIT_SP
             rv.setTextViewTextSize(R.id.time_col, sp, cfg.clockSp)
             rv.setTextViewTextSize(R.id.date_top, sp, cfg.dateSp)
+            val timeFormat = Prefs.timeFormat(context)
+            val forced12 = timeFormat == "12"
+            val forced24 = timeFormat == "24"
+            val fmt24 = if (forced12) "h:mm" else "HH:mm"
+            val fmt12 = if (forced24) "HH:mm" else "h:mm"
             if (cfg.swapTimeDate) {
                 rv.setCharSequence(R.id.time_col, "setFormat24Hour", "EEE, dd.MM")
                 rv.setCharSequence(R.id.time_col, "setFormat12Hour", "EEE, dd.MM")
-                rv.setCharSequence(R.id.date_top, "setFormat24Hour", "HH:mm")
-                rv.setCharSequence(R.id.date_top, "setFormat12Hour", "h:mm")
+                rv.setCharSequence(R.id.date_top, "setFormat24Hour", fmt24)
+                rv.setCharSequence(R.id.date_top, "setFormat12Hour", fmt12)
             } else {
-                rv.setCharSequence(R.id.time_col, "setFormat24Hour", "HH:mm")
-                rv.setCharSequence(R.id.time_col, "setFormat12Hour", "h:mm")
+                rv.setCharSequence(R.id.time_col, "setFormat24Hour", fmt24)
+                rv.setCharSequence(R.id.time_col, "setFormat12Hour", fmt12)
                 rv.setCharSequence(R.id.date_top, "setFormat24Hour", "EEE, dd.MM")
                 rv.setCharSequence(R.id.date_top, "setFormat12Hour", "EEE, dd.MM")
             }
+            val theme = Prefs.widgetTheme(context)
+            val backgroundRes = when (theme) {
+                "dark" -> R.drawable.widget_background_dark
+                "amoled" -> R.drawable.widget_background_amoled
+                else -> R.drawable.widget_background
+            }
+            rv.setInt(R.id.widget_root, "setBackgroundResource", backgroundRes)
             rv.setTextViewTextSize(R.id.weather_temperature, sp, cfg.tempSp)
             rv.setTextViewTextSize(R.id.weather_location, sp, cfg.locSp)
             rv.setTextViewTextSize(R.id.weather_uv, sp, cfg.uvSp)
