@@ -8,3 +8,4 @@ keystore.properties
 *.jks
 widget-*.png
 widget-dump.txt
+AGENTS.md
