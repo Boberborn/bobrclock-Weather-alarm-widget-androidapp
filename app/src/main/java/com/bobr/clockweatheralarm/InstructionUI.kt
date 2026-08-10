@@ -483,6 +483,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
         if (!isPreview) alarms = AlarmStore.load(context)
     }
 
+    LaunchedEffect(Unit) {
+        refreshAlarms()
+    }
+
     fun scheduleSaved(alarm: SavedAlarm) {
         AlarmScheduler.cancel(context, alarm.id)
         AlarmStore.save(context, alarm)
@@ -3904,55 +3908,6 @@ private fun MoreTabContent(
     Spacer(Modifier.height(10.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
-            Text(
-                text = "Widget theme",
-                fontSize = 17.sp,
-                color = TextBrown,
-                fontFamily = FontFamily.Cursive,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Light is transparent; Dark and AMOLED add a black background.",
-                fontSize = 14.sp,
-                color = TextMuted,
-                fontFamily = FontFamily.Cursive,
-            )
-            Spacer(Modifier.height(10.dp))
-            val widgetTheme = remember { mutableStateOf(Prefs.widgetTheme(context)) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = widgetTheme.value == "light",
-                    onClick = {
-                        widgetTheme.value = "light"
-                        prefs.edit().putString(Prefs.WIDGET_THEME, "light").apply()
-                        ClockWeatherWidget.updateAll(context)
-                    },
-                    label = { Text("Light") },
-                )
-                FilterChip(
-                    selected = widgetTheme.value == "dark",
-                    onClick = {
-                        widgetTheme.value = "dark"
-                        prefs.edit().putString(Prefs.WIDGET_THEME, "dark").apply()
-                        ClockWeatherWidget.updateAll(context)
-                    },
-                    label = { Text("Dark") },
-                )
-                FilterChip(
-                    selected = widgetTheme.value == "amoled",
-                    onClick = {
-                        widgetTheme.value = "amoled"
-                        prefs.edit().putString(Prefs.WIDGET_THEME, "amoled").apply()
-                        ClockWeatherWidget.updateAll(context)
-                    },
-                    label = { Text("AMOLED") },
-                )
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
             val weatherAlerts = remember { mutableStateOf(Prefs.weatherAlertsEnabled(context)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -4415,22 +4370,6 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
                     .background(if (active) OlivePrimary else DisabledTrack),
             )
         }
-    }
-    Spacer(Modifier.height(10.dp))
-
-    Button(
-        onClick = {
-            Prefs.resetWidgetConfig(context, key)
-            config = Prefs.defaultConfig(rows, cols)
-            onChanged()
-        },
-        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = WarmOrange,
-            contentColor = PaperWarmTint,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("Reset to default", fontFamily = FontFamily.Cursive)
     }
     Spacer(Modifier.height(10.dp))
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {

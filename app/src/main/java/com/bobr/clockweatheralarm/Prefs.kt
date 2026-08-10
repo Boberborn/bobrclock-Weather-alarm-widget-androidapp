@@ -40,7 +40,6 @@ object Prefs {
     const val TEMP_UNIT = "temp_unit"
     const val WIDGET_CONFIG = "widget_config"
     const val TIME_FORMAT = "time_format"
-    const val WIDGET_THEME = "widget_theme"
     const val WEATHER_ALERTS = "weather_alerts"
 
     const val WIDGET_CELL_WIDTH_DP = 63f
@@ -252,9 +251,6 @@ object Prefs {
 
     fun timeFormat(context: Context): String =
         values(context).getString(TIME_FORMAT, "system") ?: "system"
-
-    fun widgetTheme(context: Context): String =
-        values(context).getString(WIDGET_THEME, "light") ?: "light"
 
     fun weatherAlertsEnabled(context: Context): Boolean =
         values(context).getBoolean(WEATHER_ALERTS, false)

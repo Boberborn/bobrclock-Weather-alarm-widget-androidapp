@@ -282,19 +282,12 @@ setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
                 rv.setCharSequence(R.id.date_top, "setFormat24Hour", fmt24)
                 rv.setCharSequence(R.id.date_top, "setFormat12Hour", fmt12)
             } else {
-                rv.setCharSequence(R.id.time_col, "setFormat24Hour", fmt24)
-                rv.setCharSequence(R.id.time_col, "setFormat12Hour", fmt12)
-                rv.setCharSequence(R.id.date_top, "setFormat24Hour", "EEE, dd.MM")
-                rv.setCharSequence(R.id.date_top, "setFormat12Hour", "EEE, dd.MM")
-            }
-            val theme = Prefs.widgetTheme(context)
-            val backgroundRes = when (theme) {
-                "dark" -> R.drawable.widget_background_dark
-                "amoled" -> R.drawable.widget_background_amoled
-                else -> R.drawable.widget_background
-            }
-            rv.setInt(R.id.widget_root, "setBackgroundResource", backgroundRes)
-            rv.setTextViewTextSize(R.id.weather_temperature, sp, cfg.tempSp)
+rv.setCharSequence(R.id.time_col, "setFormat24Hour", fmt24)
+            rv.setCharSequence(R.id.time_col, "setFormat12Hour", fmt12)
+            rv.setCharSequence(R.id.date_top, "setFormat24Hour", "EEE, dd.MM")
+            rv.setCharSequence(R.id.date_top, "setFormat12Hour", "EEE, dd.MM")
+        }
+        rv.setTextViewTextSize(R.id.weather_temperature, sp, cfg.tempSp)
             rv.setTextViewTextSize(R.id.weather_location, sp, cfg.locSp)
             rv.setTextViewTextSize(R.id.weather_uv, sp, cfg.uvSp)
             rv.setTextColor(R.id.time_col, cfg.clockColor)
