@@ -1572,18 +1572,26 @@ private fun CurrentWeatherCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text(
-                        text = "H: $high",
-                        fontSize = 17.sp,
-                        color = WarmOrange,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                    Text(
-                        text = "L: $low",
-                        fontSize = 17.sp,
-                        color = RainBlue,
-                        fontFamily = FontFamily.Cursive,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArrowUpIcon(Modifier.size(13.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = high,
+                            fontSize = 17.sp,
+                            color = WarmOrange,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArrowDownIcon(Modifier.size(13.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = low,
+                            fontSize = 17.sp,
+                            color = RainBlue,
+                            fontFamily = FontFamily.Cursive,
+                        )
+                    }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1631,6 +1639,46 @@ private fun WindIcon(modifier: Modifier = Modifier) {
             }
             drawPath(path, OliveMuted, style = Stroke(sw, cap = StrokeCap.Round))
         }
+    }
+}
+
+@Composable
+private fun ArrowUpIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val sw = 1.6.dp.toPx()
+        val path = Path().apply {
+            moveTo(size.width * 0.12f, size.height * 0.6f)
+            lineTo(size.width * 0.5f, size.height * 0.2f)
+            lineTo(size.width * 0.88f, size.height * 0.6f)
+        }
+        drawPath(path, WarmOrange, style = Stroke(sw, cap = StrokeCap.Round))
+        drawLine(
+            WarmOrange,
+            Offset(size.width * 0.5f, size.height * 0.2f),
+            Offset(size.width * 0.5f, size.height * 0.9f),
+            strokeWidth = sw,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+@Composable
+private fun ArrowDownIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val sw = 1.6.dp.toPx()
+        val path = Path().apply {
+            moveTo(size.width * 0.12f, size.height * 0.4f)
+            lineTo(size.width * 0.5f, size.height * 0.8f)
+            lineTo(size.width * 0.88f, size.height * 0.4f)
+        }
+        drawPath(path, RainBlue, style = Stroke(sw, cap = StrokeCap.Round))
+        drawLine(
+            RainBlue,
+            Offset(size.width * 0.5f, size.height * 0.8f),
+            Offset(size.width * 0.5f, size.height * 0.1f),
+            strokeWidth = sw,
+            cap = StrokeCap.Round,
+        )
     }
 }
 

@@ -82,13 +82,15 @@ class ClockWeatherWidget : AppWidgetProvider() {
             val minWidth = (cols * Prefs.WIDGET_REAL_CELL_WIDTH_DP).toInt()
             val minHeight = (rows * Prefs.WIDGET_REAL_CELL_HEIGHT_DP).toInt()
             val hourlyCount = hourlyCountForCols(cols)
+            val maxHeight = minHeight
             return render(
                 context,
                 WidgetOptions(
                     small = minWidth in 1..250,
-                    showHourly = minHeight >= 65 && hourlyCount > 0,
+                    showHourly = maxHeight >= 65 && hourlyCount > 0,
                     hourlyCount = hourlyCount,
                     minHeight = minHeight,
+                    maxHeight = maxHeight,
                     minWidth = minWidth,
                     key = Prefs.cellKey(rows, cols),
                 ),
@@ -108,6 +110,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
             val showHourly: Boolean,
             val hourlyCount: Int,
             val minHeight: Int,
+            val maxHeight: Int,
             val minWidth: Int,
             val key: String,
         ) {
@@ -119,19 +122,21 @@ class ClockWeatherWidget : AppWidgetProvider() {
             val options = manager.getAppWidgetOptions(widgetId)
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
             android.util.Log.d("WidgetSize", "id=$widgetId $options")
             android.util.Log.d(
                 "WidgetSize",
-                "id=$widgetId minWidth=$minWidth minHeight=$minHeight " +
+                "id=$widgetId minWidth=$minWidth minHeight=$minHeight maxHeight=$maxHeight " +
                     "density=${context.resources.displayMetrics.density} " +
                     "scaled=${context.resources.displayMetrics.scaledDensity}",
             )
             val hourlyCols = (minWidth / Prefs.WIDGET_CELL_WIDTH_DP).roundToInt().coerceAtLeast(1)
             return WidgetOptions(
                 small = minWidth in 1..250,
-                showHourly = minHeight >= 65 && hourlyCountForCols(hourlyCols) > 0,
+                showHourly = maxHeight >= 65 && hourlyCountForCols(hourlyCols) > 0,
                 hourlyCount = hourlyCountForCols(hourlyCols),
                 minHeight = minHeight,
+                maxHeight = maxHeight,
                 minWidth = minWidth,
                 key = Prefs.cellKeyFromSize(minWidth, minHeight),
             )
@@ -318,19 +323,31 @@ setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
             maxCount: Int = 5,
         ) {
             val hourly = prefs.getString(Prefs.WEATHER_HOURLY, null) ?: return
-            val now = java.time.LocalTime.now()
+            val now = java.time.LocalDateTime.now()
+            val fetchTime = try {
+                val millis = prefs.getLong(Prefs.WEATHER_UPDATED, 0L)
+                java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            } catch (_: Exception) {
+                null
+            }
+            val fetchHour = fetchTime?.withMinute(0)?.withSecond(0)?.withNano(0)
             rv.removeAllViews(R.id.hourly_container)
             var added = 0
+            var idx = 0
             hourly.split("|").forEach { entry ->
                 if (added >= maxCount) return@forEach
                 val parts = entry.split(";")
                 if (parts.size >= 2) {
-                    val entryTime = try {
-                        java.time.LocalTime.parse(parts[0])
-                    } catch (_: Exception) {
-                        null
+                    val entryDateTime = if (fetchHour != null) {
+                        fetchHour.plusHours(idx.toLong())
+                    } else {
+                        try {
+                            java.time.LocalDate.now().atTime(java.time.LocalTime.parse(parts[0]))
+                        } catch (_: Exception) {
+                            null
+                        }
                     }
-                    if (entryTime == null || !entryTime.isAfter(now)) return@forEach
+                    if (entryDateTime == null || !entryDateTime.isAfter(now)) { idx++; return@forEach }
                     val item = RemoteViews(context.packageName, R.layout.widget_hour_item)
                     item.setTextViewText(R.id.hour_time, parts[0])
                     item.setTextViewText(
@@ -352,6 +369,9 @@ setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
                     )
                     rv.addView(R.id.hourly_container, item)
                     added++
+                    idx++
+                } else {
+                    idx++
                 }
             }
         }

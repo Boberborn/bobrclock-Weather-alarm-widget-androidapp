@@ -69,7 +69,7 @@ object Prefs {
         val condColor: Int = 0xFFFFFFFF.toInt(),
         val locSp: Float = 8f,
         val locColor: Int = 0xFFFFFFFF.toInt(),
-        val uvSp: Float = 8f,
+        val uvSp: Float = 10f,
         val uvColor: Int = 0xFFFFFFFF.toInt(),
         val iconDp: Float = 60f,
         val showIcon: Boolean = true,
@@ -125,7 +125,7 @@ object Prefs {
                     condColor = o.optLong("condColor", 0xFFFFFFFFL).toInt(),
                     locSp = o.optDouble("locSp", 8.0).toFloat(),
                     locColor = o.optLong("locColor", 0xFFFFFFFFL).toInt(),
-                    uvSp = o.optDouble("uvSp", 8.0).toFloat(),
+                    uvSp = o.optDouble("uvSp", 10.0).toFloat(),
                     uvColor = o.optLong("uvColor", 0xFFFFFFFFL).toInt(),
                     iconDp = o.optDouble("iconDp", 40.0).toFloat(),
                     showIcon = o.optBoolean("showIcon", true),
@@ -165,23 +165,23 @@ object Prefs {
         val narrow = cols < 5
         return when {
             rows < 2 -> WidgetConfig(
-                clockSp = 32f, tempSp = 28f, condSp = 9f, locSp = 8f, uvSp = 8f,
-                iconDp = 60f, showHourly = false,
+                clockSp = 23f, tempSp = 20f, condSp = 9f, locSp = 8f, uvSp = 10f,
+                iconDp = 53f, showCondition = true, showUv = true, showLocation = false, showHourly = false,
             )
             cols == 2 -> WidgetConfig(
-                clockSp = 23f, tempSp = 20f, condSp = 9f, locSp = 8f, uvSp = 8f,
+                clockSp = 23f, tempSp = 20f, condSp = 9f, locSp = 8f, uvSp = 10f,
                 iconDp = 53f, showCondition = true, showUv = true, showLocation = false, showHourly = true,
             )
             cols == 3 -> WidgetConfig(
-                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 10f,
                 iconDp = 125f, showCondition = true, showUv = true, showLocation = true, showHourly = true,
             )
             cols == 4 -> WidgetConfig(
-                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 10f,
                 iconDp = 152f, showCondition = true, showUv = true, showLocation = true, showHourly = true,
             )
             else -> WidgetConfig(
-                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 8f,
+                clockSp = 36f, dateSp = 14f, tempSp = 30f, condSp = 10f, locSp = 8f, uvSp = 10f,
                 iconDp = 166f, showUv = true, showLocation = true, showHourly = true,
             )
         }

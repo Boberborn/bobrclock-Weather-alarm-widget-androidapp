@@ -131,7 +131,7 @@
                     android:id="@+id/weather_uv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="1dp"
                     android:textColor="#FFFFFFFF"
                     android:textSize="11sp"
                     android:shadowColor="#FF000000"
