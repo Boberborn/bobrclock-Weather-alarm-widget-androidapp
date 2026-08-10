@@ -2,6 +2,12 @@
 
 A deliberately small Android clock/date/weather widget with reliable recurring alarms.
 
+## Screenshots
+
+| Clock Tab | Weather Tab | Widget Editor | Widget w5 |
+|-----------|-------------|---------------|-----------|
+| ![Clock Tab](Screenshots/clocktab.jpg) | ![Weather Tab](Screenshots/weathertab.jpg) | ![Widget Editor](Screenshots/widgeteditortab.jpg) | ![Widget w5](Screenshots/widgetw5.jpg) |
+
 ## Widget sizes
 
 | Name | Grid | Min width | Hourly forecast | Features |
