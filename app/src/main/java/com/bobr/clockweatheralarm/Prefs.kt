@@ -39,6 +39,7 @@ object Prefs {
     const val WIND_UNIT = "wind_unit"
     const val TEMP_UNIT = "temp_unit"
     const val WIDGET_CONFIG = "widget_config"
+    const val ALARM_IGNORE_SILENT = "alarm_ignore_silent"
 
     const val WIDGET_CELL_WIDTH_DP = 63f
     const val WIDGET_CELL_HEIGHT_DP = 34f
@@ -53,6 +54,9 @@ object Prefs {
 
     fun previewCols(context: Context): Int =
         values(context).getInt(PREVIEW_COLS_PREF, PREVIEW_COLS)
+
+    fun alarmIgnoresSilentMode(context: Context): Boolean =
+        values(context).getBoolean(ALARM_IGNORE_SILENT, true)
 
     fun savePreviewCols(context: Context, cols: Int) {
         values(context).edit().putInt(PREVIEW_COLS_PREF, cols).apply()

@@ -13,6 +13,7 @@ class WeatherJobService : JobService() {
         Thread {
             val success = refreshWeather()
             ClockWeatherWidget.updateAll(this)
+            AlarmScheduler.ensureScheduled(this)
             jobFinished(params, !success)
             if (params.jobId == WeatherScheduler.SCHEDULED_JOB_ID && success) {
                 WeatherScheduler.scheduleNext(this)

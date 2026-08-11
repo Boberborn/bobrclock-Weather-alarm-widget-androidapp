@@ -27,6 +27,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
         }
         WeatherScheduler.ensureScheduled(context)
         WeatherScheduler.refreshNow(context)
+        AlarmScheduler.ensureScheduled(context)
     }
 
     override fun onAppWidgetOptionsChanged(

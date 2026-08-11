@@ -400,6 +400,8 @@ fun InstructionUI(modifier: Modifier = Modifier) {
 
     if (!isPreview) {
         LaunchedEffect(Unit) {
+            AlarmScheduler.ensureScheduled(context)
+            WeatherScheduler.ensureScheduled(context)
             if (!gpsAutoTried) {
                 gpsAutoTried = true
                 val prefs = Prefs.values(context)
@@ -3867,6 +3869,36 @@ private fun MoreTabContent(
                         widgetShowAlarms = checked
                         prefs.edit().putBoolean(Prefs.WIDGET_SHOW_ALARMS, checked).apply()
                         ClockWeatherWidget.updateAll(context)
+                    },
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            val ignoreSilent = remember { mutableStateOf(Prefs.alarmIgnoresSilentMode(context)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Play alarm in silent mode",
+                        fontSize = 17.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Raise the alarm volume when ringing, even if the phone is silent or in DND.",
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+                CustomSwitch(
+                    checked = ignoreSilent.value,
+                    onCheckedChange = { checked ->
+                        ignoreSilent.value = checked
+                        prefs.edit().putBoolean(Prefs.ALARM_IGNORE_SILENT, checked).apply()
                     },
                 )
             }
