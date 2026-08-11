@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -21,6 +22,7 @@ class AlarmService : Service() {
     private var vibrator: Vibrator? = null
     private var soundName: String = "Default alarm"
     private var soundUri: String? = null
+    private var restoredAlarmVolume = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -43,6 +45,7 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        restoreAlarmVolume()
         player?.release()
         player = null
         vibrator?.cancel()
@@ -134,6 +137,7 @@ class AlarmService : Service() {
     }
 
     private fun startSoundAndVibration(customUri: String?) {
+        ensureAudibleAlarmStream()
         player?.release()
         player = createPlayer(customUri?.let(Uri::parse)) ?: createPlayer(
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -171,8 +175,34 @@ class AlarmService : Service() {
         }
     }
 
+    private fun ensureAudibleAlarmStream() {
+        if (!Prefs.alarmIgnoresSilentMode(this)) return
+        val audio = getSystemService(AudioManager::class.java)
+        val stream = AudioManager.STREAM_ALARM
+        val max = audio.getStreamMaxVolume(stream)
+        val current = audio.getStreamVolume(stream)
+        val minimum = (max * 0.7f).toInt().coerceAtLeast(1)
+        if (current < minimum) {
+            audio.setStreamVolume(stream, minimum, 0)
+            AlarmLog.log(this, "raised alarm volume from $current to $minimum (silent mode)")
+            restoredAlarmVolume = current
+        }
+    }
+
+    private fun restoreAlarmVolume() {
+        if (restoredAlarmVolume >= 0) {
+            try {
+                getSystemService(AudioManager::class.java)
+                    .setStreamVolume(AudioManager.STREAM_ALARM, restoredAlarmVolume, 0)
+            } catch (_: Exception) {
+            }
+            restoredAlarmVolume = -1
+        }
+    }
+
     private fun stopAlarm() {
         AlarmLog.log(this, "alarm stopped")
+        restoreAlarmVolume()
         player?.release()
         player = null
         vibrator?.cancel()

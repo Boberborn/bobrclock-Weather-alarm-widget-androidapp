@@ -41,6 +41,7 @@ object Prefs {
     const val WIDGET_CONFIG = "widget_config"
     const val TIME_FORMAT = "time_format"
     const val WEATHER_ALERTS = "weather_alerts"
+    const val ALARM_IGNORE_SILENT = "alarm_ignore_silent"
 
     const val WIDGET_CELL_WIDTH_DP = 63f
     const val WIDGET_CELL_HEIGHT_DP = 34f
@@ -254,6 +255,9 @@ object Prefs {
 
     fun weatherAlertsEnabled(context: Context): Boolean =
         values(context).getBoolean(WEATHER_ALERTS, false)
+
+    fun alarmIgnoresSilentMode(context: Context): Boolean =
+        values(context).getBoolean(ALARM_IGNORE_SILENT, true)
 
     fun saveBackup(context: Context) {
         val o = JSONObject()

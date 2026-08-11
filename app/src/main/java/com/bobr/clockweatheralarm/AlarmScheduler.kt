@@ -17,12 +17,28 @@ object AlarmScheduler {
         cancelLegacy(context)
         val manager = context.getSystemService(AlarmManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
+            AlarmLog.log(context, "reschedule skipped: exact alarm permission missing")
             return false
         }
         val enabled = AlarmStore.load(context).filter { it.enabled && it.daysMask != 0 }
+        AlarmLog.log(context, "reschedule: ${enabled.size} enabled alarm(s)")
         val result = enabled.all { schedule(context, it) }
         ClockWeatherWidget.updateAll(context)
         return result
+    }
+
+    fun ensureScheduled(context: Context): Boolean {
+        val enabled = AlarmStore.load(context).filter { it.enabled && it.daysMask != 0 }
+        if (enabled.isEmpty()) return true
+        val missing = enabled.any { a ->
+            PendingIntent.getBroadcast(
+                context,
+                REQUEST_ALARM_BASE + a.id,
+                Intent(context, AlarmReceiver::class.java),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            ) == null
+        }
+        return if (missing) scheduleAll(context) else true
     }
 
     fun scheduleById(context: Context, id: Int): Boolean {
@@ -57,9 +73,14 @@ object AlarmScheduler {
                 AlarmManager.AlarmClockInfo(next, showIntent),
                 alarmIntent,
             )
+            AlarmLog.log(
+                context,
+                "scheduled alarm #${alarm.id} for $next",
+            )
             ClockWeatherWidget.updateAll(context)
             true
         } catch (_: SecurityException) {
+            AlarmLog.log(context, "schedule alarm #${alarm.id} FAILED (SecurityException)")
             false
         }
     }
