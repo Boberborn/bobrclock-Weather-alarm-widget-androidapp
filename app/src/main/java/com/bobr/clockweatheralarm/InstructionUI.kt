@@ -3940,37 +3940,6 @@ private fun MoreTabContent(
     Spacer(Modifier.height(10.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
-            val weatherAlerts = remember { mutableStateOf(Prefs.weatherAlertsEnabled(context)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Weather alerts",
-                        fontSize = 17.sp,
-                        color = TextBrown,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Notify about rain, snow, storms and extreme temperatures. Off by default.",
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                }
-                CustomSwitch(
-                    checked = weatherAlerts.value,
-                    onCheckedChange = { checked ->
-                        weatherAlerts.value = checked
-                        prefs.edit().putBoolean(Prefs.WEATHER_ALERTS, checked).apply()
-                        if (checked) WeatherScheduler.refreshNow(context)
-                    },
-                )
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
