@@ -34,10 +34,14 @@ All sizes: `maxHeight ≥ 65 dp → hourly shown`, `compact = false`.
 
 - **Clock tab** – large clock, current weather card (up/down arrows for high/low temp), month calendar, alarm list.
 - **Weather tab** – daily details with hourly temperature graph, UV index, wind speed, sunrise/sunset.
-- **Alarms tab** – add/edit/delete alarms, per-day scheduling, custom alarm sounds.
-- **Widget editor** – per-width config for clock/date/temp text sizes, icon size, UV, location, hourly forecast toggle.
+- **Alarms tab** – add/edit/delete alarms, per-day scheduling, custom alarm sounds. (Planned: merge into Clock tab.)
+- **Widget editor** – per-width config for clock/date/temp text sizes, icon size, UV, location, hourly forecast toggle; **Save/Load backup** buttons.
 - **Hourly forecast** – shows the next 2–5 hours depending on widget width; rolls over past midnight correctly.
 - **Alarm icon** – alarm clock icon + times shown under the date on the widget.
+- **Alarm in silent mode** – option to raise volume and play alarm even when the phone is in silent/DND mode.
+- **12/24h time format** – follows system setting by default, with optional override in settings.
+- **Widget tap** – tap top-left to open app on Weather tab; top-right or elsewhere refreshes weather.
+- **Settings backup** – Save/Load backup, Reset to defaults.
 
 ## Expected memory
 
@@ -64,6 +68,13 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 ```powershell
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
+
+## Planned
+
+- **Multilingual** – follow Android system language with optional override.
+- Merge Alarms tab into Clock tab.
+- **More tab** – app version, branch, and log viewer.
+- **Autoclear log** lines older than 3 days.
 
 ## Alarm reliability checklist
 
