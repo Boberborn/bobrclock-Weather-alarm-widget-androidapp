@@ -288,7 +288,9 @@ object Prefs {
             val v = o.get(k)
             when (v) {
                 is JSONObject -> editor.putString(k, v.toString())
-                is Number -> if (v is Double && v == Math.floor(v) && v < Long.MAX_VALUE) {
+                is Int -> editor.putInt(k, v)
+                is Long -> editor.putLong(k, v)
+                is Double -> if (v == Math.floor(v) && v < Long.MAX_VALUE) {
                     editor.putLong(k, v.toLong())
                 } else {
                     editor.putString(k, v.toString())
