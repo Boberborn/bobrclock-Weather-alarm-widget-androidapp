@@ -1,4 +1,4 @@
-name: Build and Release APK
+name: Build Release
 
 on:
   release:
@@ -32,19 +32,25 @@ jobs:
           keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
           EOF
 
-      - name: Build release APK
+      - name: Place keystore where Gradle resolves it (app module)
         run: |
-          ./gradlew assembleRelease --no-daemon
+          cp bobr-release.jks app/bobr-release.jks
 
-      - name: Find signed APK
+      - name: Build release APK and AAB
+        run: |
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Find signed artifacts
         run: |
           SIGNED_APK=$(find app/build/outputs/apk/release -name "app-release.apk" -type f | head -1)
+          SIGNED_AAB=$(find app/build/outputs/bundle/release -name "app-release.aab" -type f | head -1)
           echo "SIGNED_APK=$SIGNED_APK" >> $GITHUB_ENV
+          echo "SIGNED_AAB=$SIGNED_AAB" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.SIGNED_APK }}
+          files: ${{ env.SIGNED_APK }}${{ env.SIGNED_AAB && format(' {0}', env.SIGNED_AAB) || '' }}
           tag_name: ${{ github.event.release.tag_name }}
           name: ${{ github.event.release.name }}
           body: ${{ github.event.release.body }}
