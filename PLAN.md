@@ -4,8 +4,8 @@
 - [x] Ensure the app never turns on auto-rotate display.
 - [x] Rename the Clock tab to Main.
 - [x] Remove the separate Alarms tab and keep alarm features in the Main tab.
-- [x] Verify the app works correctly in all countries (units, weather, date/time formats).
 - [ ] Make the app multilingual: follow the Android system language by default, with an optional language override in settings.
+- [x] Verify the app works correctly in all countries (units, weather, date/time formats).
 - [x] System 12/24h time format: follow the system by default, with an optional override in settings.
 - [x] Alarm in silent mode: option to play alarm even when the phone is in silent/DND mode.
 - [x] Save/Load backup buttons live in the Widget editor menu (not the Settings tab).
@@ -17,4 +17,4 @@ All of the above were prepared on a `features` branch and merged into `master`.
 
 ## Follow-up
 
-- Multilingual support (system language + optional override) is the only open item.
+- New items above are prioritized next (items 5–8 in the main list).
