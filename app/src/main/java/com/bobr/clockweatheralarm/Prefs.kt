@@ -56,9 +56,6 @@ object Prefs {
     fun previewCols(context: Context): Int =
         values(context).getInt(PREVIEW_COLS_PREF, PREVIEW_COLS)
 
-    fun alarmIgnoresSilentMode(context: Context): Boolean =
-        values(context).getBoolean(ALARM_IGNORE_SILENT, true)
-
     fun savePreviewCols(context: Context, cols: Int) {
         values(context).edit().putInt(PREVIEW_COLS_PREF, cols).apply()
     }
