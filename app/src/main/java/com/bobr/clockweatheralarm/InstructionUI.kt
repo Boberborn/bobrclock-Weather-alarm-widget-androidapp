@@ -371,7 +371,17 @@ private val DemoAlarms = listOf(
 fun InstructionUI(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val isPreview = LocalInspectionMode.current
-    var selectedTab by rememberSaveable { mutableStateOf(InstructionTab.Clock) }
+    val intentTab = remember {
+        (context as? android.app.Activity)?.intent?.getStringExtra("tab")
+    }
+    val initialTab = when (intentTab) {
+        "weather" -> InstructionTab.Weather
+        "alarms" -> InstructionTab.Alarms
+        "widget" -> InstructionTab.Widget
+        "settings" -> InstructionTab.Settings
+        else -> InstructionTab.Clock
+    }
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     var alarmEditorVisible by remember { mutableStateOf(false) }
     var editingAlarmId by remember { mutableStateOf<Int?>(null) }
 
@@ -473,6 +483,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
 
     fun refreshAlarms() {
         if (!isPreview) alarms = AlarmStore.load(context)
+    }
+
+    LaunchedEffect(Unit) {
+        refreshAlarms()
     }
 
     fun scheduleSaved(alarm: SavedAlarm) {
@@ -3847,6 +3861,85 @@ private fun MoreTabContent(
     Spacer(Modifier.height(10.dp))
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Time format",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "System uses the phone's 12/24h setting by default.",
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(10.dp))
+            val timeFormat = remember { mutableStateOf(Prefs.timeFormat(context)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = timeFormat.value == "system",
+                    onClick = {
+                        timeFormat.value = "system"
+                        prefs.edit().putString(Prefs.TIME_FORMAT, "system").apply()
+                        ClockWeatherWidget.updateAll(context)
+                    },
+                    label = { Text("System") },
+                )
+                FilterChip(
+                    selected = timeFormat.value == "12",
+                    onClick = {
+                        timeFormat.value = "12"
+                        prefs.edit().putString(Prefs.TIME_FORMAT, "12").apply()
+                        ClockWeatherWidget.updateAll(context)
+                    },
+                    label = { Text("12h") },
+                )
+                FilterChip(
+                    selected = timeFormat.value == "24",
+                    onClick = {
+                        timeFormat.value = "24"
+                        prefs.edit().putString(Prefs.TIME_FORMAT, "24").apply()
+                        ClockWeatherWidget.updateAll(context)
+                    },
+                    label = { Text("24h") },
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            val ignoreSilent = remember { mutableStateOf(Prefs.alarmIgnoresSilentMode(context)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Play alarm in silent mode",
+                        fontSize = 17.sp,
+                        color = TextBrown,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Raise the alarm volume when ringing, even if the phone is silent or in DND.",
+                        fontSize = 14.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Cursive,
+                    )
+                }
+                CustomSwitch(
+                    checked = ignoreSilent.value,
+                    onCheckedChange = { checked ->
+                        ignoreSilent.value = checked
+                        prefs.edit().putBoolean(Prefs.ALARM_IGNORE_SILENT, checked).apply()
+                    },
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -4310,20 +4403,71 @@ private fun WidgetEditorTab(context: Context, onChanged: () -> Unit) {
         }
     }
     Spacer(Modifier.height(10.dp))
-
-    Button(
-        onClick = {
-            Prefs.resetWidgetConfig(context, key)
-            config = Prefs.defaultConfig(rows, cols)
-            onChanged()
-        },
-        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-            containerColor = WarmOrange,
-            contentColor = PaperWarmTint,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("Reset to default", fontFamily = FontFamily.Cursive)
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                text = "Backup & restore",
+                fontSize = 17.sp,
+                color = TextBrown,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Save the current settings and alarms, or restore the last saved backup.",
+                fontSize = 14.sp,
+                color = TextMuted,
+                fontFamily = FontFamily.Cursive,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = {
+                        Prefs.saveBackup(context)
+                        toast(context, "Backup saved")
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = OlivePrimary,
+                        contentColor = PaperWarmTint,
+                    ),
+                ) {
+                    Text("Save backup", fontFamily = FontFamily.Cursive)
+                }
+                Button(
+                    onClick = {
+                        if (Prefs.restoreBackup(context)) {
+                            ClockWeatherWidget.updateAll(context)
+                            AlarmScheduler.scheduleAll(context)
+                            onChanged()
+                            toast(context, "Backup restored")
+                        } else {
+                            toast(context, "No backup found")
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = OlivePrimary,
+                        contentColor = PaperWarmTint,
+                    ),
+                ) {
+                    Text("Restore backup", fontFamily = FontFamily.Cursive)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    Prefs.clearAll(context)
+                    ClockWeatherWidget.updateAll(context)
+                    onChanged()
+                    toast(context, "Reset to defaults")
+                },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = WarmOrange,
+                    contentColor = PaperWarmTint,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Reset to defaults", fontFamily = FontFamily.Cursive)
+            }
+        }
     }
 }
 

@@ -1,0 +1,52 @@
+name: Build and Release APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bobr-release.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Create keystore.properties
+        run: |
+          cat <<EOF > keystore.properties
+          storeFile=bobr-release.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=bobr
+          keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
+          EOF
+
+      - name: Build release APK
+        run: |
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Find signed APK
+        run: |
+          SIGNED_APK=$(find app/build/outputs/apk/release -name "app-release.apk" -type f | head -1)
+          echo "SIGNED_APK=$SIGNED_APK" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.SIGNED_APK }}
+          tag_name: ${{ github.event.release.tag_name }}
+          name: ${{ github.event.release.name }}
+          body: ${{ github.event.release.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

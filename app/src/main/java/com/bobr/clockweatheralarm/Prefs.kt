@@ -39,6 +39,7 @@ object Prefs {
     const val WIND_UNIT = "wind_unit"
     const val TEMP_UNIT = "temp_unit"
     const val WIDGET_CONFIG = "widget_config"
+    const val TIME_FORMAT = "time_format"
     const val ALARM_IGNORE_SILENT = "alarm_ignore_silent"
 
     const val WIDGET_CELL_WIDTH_DP = 63f
@@ -250,4 +251,67 @@ object Prefs {
         }
         return "$value${tempLabel(context)}"
     }
+
+    fun timeFormat(context: Context): String =
+        values(context).getString(TIME_FORMAT, "system") ?: "system"
+
+    fun alarmIgnoresSilentMode(context: Context): Boolean =
+        values(context).getBoolean(ALARM_IGNORE_SILENT, true)
+
+    fun saveBackup(context: Context) {
+        val o = JSONObject()
+        for ((k, v) in values(context).all) {
+            when (v) {
+                is String -> o.put(k, v)
+                is Int -> o.put(k, v)
+                is Long -> o.put(k, v)
+                is Float -> o.put(k, v.toDouble())
+                is Double -> o.put(k, v)
+                is Boolean -> o.put(k, v)
+                is java.util.Set<*> -> {
+                    val arr = org.json.JSONArray()
+                    for (item in v) arr.put(item.toString())
+                    o.put(k, arr)
+                }
+            }
+        }
+        context.openFileOutput(BACKUP_FILE, Context.MODE_PRIVATE).use { out ->
+            out.write(o.toString().toByteArray(Charsets.UTF_8))
+        }
+    }
+
+    fun restoreBackup(context: Context): Boolean = try {
+        val raw = context.openFileInput(BACKUP_FILE).bufferedReader().use { it.readText() }
+        val o = JSONObject(raw)
+        val editor = values(context).edit()
+        for (k in values(context).all.keys) editor.remove(k)
+        val it = o.keys()
+        while (it.hasNext()) {
+            val k = it.next()
+            val v = o.get(k)
+            when (v) {
+                is JSONObject -> editor.putString(k, v.toString())
+                is Int -> editor.putInt(k, v)
+                is Long -> editor.putLong(k, v)
+                is Double -> if (v == Math.floor(v) && v < Long.MAX_VALUE) {
+                    editor.putLong(k, v.toLong())
+                } else {
+                    editor.putString(k, v.toString())
+                }
+                is Boolean -> editor.putBoolean(k, v)
+                is String -> editor.putString(k, v)
+                else -> editor.putString(k, v.toString())
+            }
+        }
+        editor.apply()
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    fun clearAll(context: Context) {
+        values(context).edit().clear().apply()
+    }
+
+    private const val BACKUP_FILE = "bobr_backup.json"
 }

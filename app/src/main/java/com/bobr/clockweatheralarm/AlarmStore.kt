@@ -101,7 +101,7 @@ object AlarmStore {
                     .put("soundName", alarm.soundName),
             )
         }
-        Prefs.values(context).edit().putString(Prefs.ALARMS, array.toString()).apply()
+        Prefs.values(context).edit().putString(Prefs.ALARMS, array.toString()).commit()
     }
 
     private fun migrateLegacyAlarm(context: Context) {
