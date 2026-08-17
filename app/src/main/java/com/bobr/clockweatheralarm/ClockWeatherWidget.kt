@@ -54,6 +54,13 @@ class ClockWeatherWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
         if (intent.action == ACTION_REFRESH) {
             WeatherScheduler.refreshNow(context)
+        } else if (intent.action == ACTION_TAP_LEFT) {
+            val open = Intent(context, InstructionActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("tab", "weather")
+            context.startActivity(open)
+        } else if (intent.action == ACTION_TAP_RIGHT) {
+            WeatherScheduler.refreshNow(context)
         } else if (intent.action == ACTION_TAP) {
             val now = System.currentTimeMillis()
             if (now - lastTap < DOUBLE_TAP_MS) {
@@ -71,6 +78,8 @@ class ClockWeatherWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.bobr.clockweatheralarm.REFRESH_WEATHER"
         const val ACTION_TAP = "com.bobr.clockweatheralarm.TAP_WIDGET"
+        const val ACTION_TAP_LEFT = "com.bobr.clockweatheralarm.TAP_LEFT"
+        const val ACTION_TAP_RIGHT = "com.bobr.clockweatheralarm.TAP_RIGHT"
         private const val DOUBLE_TAP_MS = 400L
         private const val CELL_HEIGHT_DP = 58
         private var lastTap = 0L
@@ -265,6 +274,23 @@ setViewVisibility(R.id.weather_block, android.view.View.VISIBLE)
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
                 setOnClickPendingIntent(R.id.widget_root, tap)
+
+                val tapLeft = PendingIntent.getActivity(
+                    context,
+                    6103,
+                    Intent(context, InstructionActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .putExtra("tab", "weather"),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                val tapRight = PendingIntent.getBroadcast(
+                    context,
+                    6104,
+                    Intent(context, ClockWeatherWidget::class.java).setAction(ACTION_TAP_RIGHT),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                setOnClickPendingIntent(R.id.corner_tap_left, tapLeft)
+                setOnClickPendingIntent(R.id.corner_tap_right, tapRight)
             }
         }
 
