@@ -73,7 +73,6 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 
 - **Multilingual** – follow Android system language with optional override.
 - Merge Alarms tab into Clock tab.
-- **More tab** – app version, branch, and log viewer.
 - **Autoclear log** lines older than 3 days.
 
 ## Alarm reliability checklist

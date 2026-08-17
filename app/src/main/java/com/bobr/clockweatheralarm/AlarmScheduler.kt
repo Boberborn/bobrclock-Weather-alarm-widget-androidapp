@@ -12,6 +12,7 @@ object AlarmScheduler {
     private const val REQUEST_SHOW_BASE = 20_000
     private const val REQUEST_TEST = 30_001
     private const val REQUEST_SNOOZE = 30_002
+    private const val REQUEST_TICK = 40_000
 
     fun scheduleAll(context: Context): Boolean {
         cancelLegacy(context)
@@ -24,6 +25,7 @@ object AlarmScheduler {
         AlarmLog.log(context, "reschedule: ${enabled.size} enabled alarm(s)")
         val result = enabled.all { schedule(context, it) }
         ClockWeatherWidget.updateAll(context)
+        scheduleNextTick(context)
         return result
     }
 
@@ -78,6 +80,7 @@ object AlarmScheduler {
                 "scheduled alarm #${alarm.id} for $next",
             )
             ClockWeatherWidget.updateAll(context)
+            scheduleNextTick(context)
             true
         } catch (_: SecurityException) {
             AlarmLog.log(context, "schedule alarm #${alarm.id} FAILED (SecurityException)")
@@ -137,6 +140,27 @@ object AlarmScheduler {
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )
         alarmIntent?.let(manager::cancel)
+        scheduleNextTick(context)
+    }
+
+    fun scheduleNextTick(context: Context) {
+        val manager = context.getSystemService(AlarmManager::class.java)
+        val pi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_TICK,
+            Intent(context, AlarmTickReceiver::class.java).setAction(ACTION_ALARM_TICK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val next = AlarmStore.nextEnabled(context)
+        if (next == null) {
+            manager.cancel(pi)
+            return
+        }
+        try {
+            manager.setExactAndAllowWhileIdle(AlarmManager.RTC, next.second, pi)
+        } catch (_: SecurityException) {
+            AlarmLog.log(context, "scheduleNextTick failed (SecurityException)")
+        }
     }
 
     private fun cancelLegacy(context: Context) {
@@ -154,4 +178,5 @@ object AlarmScheduler {
     const val EXTRA_TEST = "test_alarm"
     const val EXTRA_SOUND_URI = "sound_uri"
     const val EXTRA_SOUND_NAME = "sound_name"
+    const val ACTION_ALARM_TICK = "com.bobr.clockweatheralarm.ALARM_TICK"
 }

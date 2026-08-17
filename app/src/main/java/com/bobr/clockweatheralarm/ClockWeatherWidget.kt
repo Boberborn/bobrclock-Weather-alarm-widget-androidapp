@@ -10,8 +10,15 @@ import android.text.SpannableString
 import android.text.style.RelativeSizeSpan
 import android.text.format.DateUtils
 import android.widget.RemoteViews
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private fun formatAlarmTime(context: Context, timeMillis: Long): String {
+    val fmt = if (Prefs.timeFormat(context) == "24") "HH:mm" else "h:mm a"
+    return SimpleDateFormat(fmt, Locale.getDefault()).format(Date(timeMillis))
+}
 
 class ClockWeatherWidget : AppWidgetProvider() {
     override fun onUpdate(
@@ -152,8 +159,8 @@ class ClockWeatherWidget : AppWidgetProvider() {
                 ?: context.getString(R.string.set_location)
             val temperature = prefs.getString(Prefs.WEATHER_TEMP, null)
             val weatherCode = prefs.getInt(Prefs.WEATHER_CODE, -1)
-            val alarms = AlarmStore.load(context).filter { it.enabled }.take(3)
-            val hasAlarms = alarms.isNotEmpty()
+            val nextAlarm = AlarmStore.nextEnabled(context)
+            val hasAlarms = nextAlarm != null
             // A tall narrow widget needs the small vertical layout, but not
             // the five-column forecast.  The wide middle widget keeps it.
             // The short wide widget uses the same type, colours, city and UV
@@ -203,7 +210,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
                     }
                 } else {
                     setViewVisibility(R.id.alarm_label, android.view.View.GONE)
-                    val alarmText = if (alarms.isEmpty()) "" else alarms.joinToString(", ") { String.format("%02d:%02d", it.hour, it.minute) }
+                    val alarmText = if (nextAlarm == null) "" else formatAlarmTime(context, nextAlarm.second)
                     setViewVisibility(
                         R.id.alarm_container,
                         if (hasAlarms) android.view.View.VISIBLE else android.view.View.GONE,
@@ -330,55 +337,43 @@ rv.setCharSequence(R.id.time_col, "setFormat24Hour", fmt24)
         ) {
             val hourly = prefs.getString(Prefs.WEATHER_HOURLY, null) ?: return
             val now = java.time.LocalDateTime.now()
-            val fetchTime = try {
-                val millis = prefs.getLong(Prefs.WEATHER_UPDATED, 0L)
-                java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
-            } catch (_: Exception) {
-                null
-            }
-            val fetchHour = fetchTime?.withMinute(0)?.withSecond(0)?.withNano(0)
+            val today = java.time.LocalDate.now()
             rv.removeAllViews(R.id.hourly_container)
             var added = 0
-            var idx = 0
+            var cursor: java.time.LocalDateTime? = null
             hourly.split("|").forEach { entry ->
                 if (added >= maxCount) return@forEach
                 val parts = entry.split(";")
-                if (parts.size >= 2) {
-                    val entryDateTime = if (fetchHour != null) {
-                        fetchHour.plusHours(idx.toLong())
-                    } else {
-                        try {
-                            java.time.LocalDate.now().atTime(java.time.LocalTime.parse(parts[0]))
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                    if (entryDateTime == null || !entryDateTime.isAfter(now)) { idx++; return@forEach }
-                    val item = RemoteViews(context.packageName, R.layout.widget_hour_item)
-                    item.setTextViewText(R.id.hour_time, parts[0])
-                    item.setTextViewText(
-                        R.id.hour_temp,
-                        smallerSuffix(
-                            Prefs.displayTemp(context, parts[1].toIntOrNull() ?: 0),
-                            Prefs.tempLabel(context),
-                        ),
-                    )
-                    item.setTextViewTextSize(R.id.hour_time, android.util.TypedValue.COMPLEX_UNIT_SP, cfg.hourTimeSp)
-                    item.setTextViewTextSize(R.id.hour_temp, android.util.TypedValue.COMPLEX_UNIT_SP, cfg.hourTempSp)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        item.setViewLayoutWidth(R.id.hour_icon, cfg.hourIconDp, 0)
-                        item.setViewLayoutHeight(R.id.hour_icon, cfg.hourIconDp, 0)
-                    }
-                    item.setImageViewResource(
-                        R.id.hour_icon,
-                        weatherIconRes(parts.getOrNull(2)?.toIntOrNull() ?: -1),
-                    )
-                    rv.addView(R.id.hourly_container, item)
-                    added++
-                    idx++
-                } else {
-                    idx++
+                if (parts.size < 2) return@forEach
+                val time = try {
+                    java.time.LocalTime.parse(parts[0])
+                } catch (_: Exception) {
+                    return@forEach
                 }
+                val entryDateTime = if (cursor == null) today.atTime(time) else cursor!!.plusHours(1)
+                cursor = entryDateTime
+                if (!entryDateTime.isAfter(now)) return@forEach
+                val item = RemoteViews(context.packageName, R.layout.widget_hour_item)
+                item.setTextViewText(R.id.hour_time, parts[0])
+                item.setTextViewText(
+                    R.id.hour_temp,
+                    smallerSuffix(
+                        Prefs.displayTemp(context, parts[1].toIntOrNull() ?: 0),
+                        Prefs.tempLabel(context),
+                    ),
+                )
+                item.setTextViewTextSize(R.id.hour_time, android.util.TypedValue.COMPLEX_UNIT_SP, cfg.hourTimeSp)
+                item.setTextViewTextSize(R.id.hour_temp, android.util.TypedValue.COMPLEX_UNIT_SP, cfg.hourTempSp)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    item.setViewLayoutWidth(R.id.hour_icon, cfg.hourIconDp, 0)
+                    item.setViewLayoutHeight(R.id.hour_icon, cfg.hourIconDp, 0)
+                }
+                item.setImageViewResource(
+                    R.id.hour_icon,
+                    weatherIconRes(parts.getOrNull(2)?.toIntOrNull() ?: -1),
+                )
+                rv.addView(R.id.hourly_container, item)
+                added++
             }
         }
 
