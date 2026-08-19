@@ -187,7 +187,10 @@ private val Ink = Color(0xFF3E2F22)
 // Models / demo state
 // ---------------------------------------------------------------------------
 
-private enum class InstructionTab { Clock, Alarms, Weather, Widget, Settings }
+private enum class InstructionTab { Clock, Weather, Widget, Settings, More }
+
+// Replace with your own donation link (PayPal, Patreon, website, etc.)
+private const val DONATE_URL = "https://www.paypal.com/donate"
 
 private enum class WeatherType { Clear, PartlyCloudy, Cloudy, Fog, Drizzle, Rain, Snow, Thunderstorm }
 
@@ -376,9 +379,10 @@ fun InstructionUI(modifier: Modifier = Modifier) {
     }
     val initialTab = when (intentTab) {
         "weather" -> InstructionTab.Weather
-        "alarms" -> InstructionTab.Alarms
+            "alarms" -> InstructionTab.Clock
         "widget" -> InstructionTab.Widget
-        "settings" -> InstructionTab.Settings
+            "settings" -> InstructionTab.Settings
+            "more" -> InstructionTab.More
         else -> InstructionTab.Clock
     }
     var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
@@ -563,24 +567,6 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     modifier = Modifier.fillMaxWidth(0.55f),
                                 )
                             }
-                            CurrentWeatherCard(
-                                location = weather.location,
-                                condition = weather.condition,
-                                temperature = weather.temperature,
-                                high = weather.high,
-                                low = weather.low,
-                                wind = weather.wind,
-                                weatherCode = weatherCode,
-                                isNight = isNightAt(
-                                    dailyDetails.firstOrNull { it.isToday }?.sunrise ?: "",
-                                    dailyDetails.firstOrNull { it.isToday }?.sunset ?: "",
-                                ),
-                                onClick = {
-                                    weatherNeedsRefresh = true
-                                    WeatherScheduler.refreshNow(context)
-                                    toast(context, "Refreshing weather…")
-                                },
-                            )
                             Spacer(Modifier.height(8.dp))
                             DateLabel(
                                 date = if (isPreview) {
@@ -592,32 +578,6 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                             )
                             Spacer(Modifier.height(6.dp))
                             MonthCalendar()
-                            Spacer(Modifier.height(8.dp))
-                            AlarmsHeader(onAdd = {
-                                editingAlarmId = null
-                                alarmEditorVisible = true
-                            })
-                            Spacer(Modifier.height(8.dp))
-                            AlarmsList(
-                                alarms = alarms,
-                                onToggle = { alarm, enabled ->
-                                    val updated = alarm.copy(enabled = enabled)
-                                    AlarmScheduler.cancel(context, alarm.id)
-                                    AlarmStore.save(context, updated)
-                                    if (enabled && ensureExactAlarmPermission(context)) {
-                                        AlarmScheduler.schedule(context, updated)
-                                    }
-                                    ClockWeatherWidget.updateAll(context)
-                                    refreshAlarms()
-                                },
-                                onClick = { alarm ->
-                                    editingAlarmId = alarm.id
-                                    alarmEditorVisible = true
-                                },
-                            )
-                            Spacer(Modifier.height(16.dp))
-                        }
-                        InstructionTab.Alarms -> {
                             Spacer(Modifier.height(8.dp))
                             AlarmsHeader(onAdd = {
                                 editingAlarmId = null
@@ -685,6 +645,48 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     ClockWeatherWidget.updateAll(context)
                                 },
                             )
+                        }
+                        InstructionTab.More -> {
+                            Spacer(Modifier.height(8.dp))
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(
+                                        text = "Thanks for using Bobr Clock!",
+                                        fontSize = 20.sp,
+                                        color = OlivePrimary,
+                                        fontFamily = FontFamily.Cursive,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = "If you find it useful, consider a small donation.",
+                                        fontSize = 14.sp,
+                                        color = TextMuted,
+                                        fontFamily = FontFamily.Cursive,
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+                                    Button(
+                                        onClick = {
+                                            val intent = Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse(DONATE_URL),
+                                            )
+                                            context.startActivity(intent)
+                                        },
+                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                            containerColor = OlivePrimary,
+                                            contentColor = PaperWarmTint,
+                                        ),
+                                    ) {
+                                        Text("Donate", fontFamily = FontFamily.Cursive)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
                         }
                     }
                     Spacer(Modifier.height(16.dp))
@@ -2947,22 +2949,6 @@ private fun TabIcon(tab: InstructionTab, selected: Boolean, modifier: Modifier =
                 drawLine(color, c, Offset(c.x, c.y - r * 0.6f), sw, StrokeCap.Round)
                 drawLine(color, c, Offset(c.x + r * 0.5f, c.y + r * 0.18f), sw, StrokeCap.Round)
             }
-            InstructionTab.Alarms -> {
-                val c = Offset(size.width / 2f, size.height * 0.54f)
-                val r = size.width * 0.3f
-                drawCircle(color, r, c, style = Stroke(sw))
-                drawLine(color, c, Offset(c.x, c.y - r * 0.55f), sw, StrokeCap.Round)
-                drawLine(color, c, Offset(c.x + r * 0.5f, c.y + r * 0.18f), sw, StrokeCap.Round)
-                drawArc(
-                    color = color,
-                    startAngle = 200f,
-                    sweepAngle = 140f,
-                    useCenter = false,
-                    topLeft = Offset(c.x - r * 0.95f, c.y - r * 1.3f),
-                    size = Size(r * 1.9f, r * 0.85f),
-                    style = Stroke(sw),
-                )
-            }
             InstructionTab.Weather -> {
                 val sunC = Offset(size.width * 0.62f, size.height * 0.34f)
                 val sunR = size.width * 0.22f
@@ -3003,6 +2989,13 @@ private fun TabIcon(tab: InstructionTab, selected: Boolean, modifier: Modifier =
                 val xs = listOf(tl.x + w * 0.2f, tl.x + w * 0.6f, tl.x + w * 0.4f)
                 listOf(y1, y2, y3).forEachIndexed { i, y ->
                     drawCircle(color, knob, Offset(xs[i], y))
+                }
+            }
+            InstructionTab.More -> {
+                val r = size.width * 0.09f
+                val cy = size.height / 2f
+                listOf(0.3f, 0.5f, 0.7f).forEach { x ->
+                    drawCircle(color, r, Offset(size.width * x, cy))
                 }
             }
         }
