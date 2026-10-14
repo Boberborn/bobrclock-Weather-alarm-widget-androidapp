@@ -64,7 +64,7 @@ object AlarmStore {
 
     fun nextEnabled(context: Context): Pair<SavedAlarm, Long>? =
         load(context)
-            .filter { it.enabled && it.daysMask != 0 }
+            .filter { it.enabled }
             .map { it to nextTrigger(it) }
             .minByOrNull { it.second }
 
@@ -80,7 +80,8 @@ object AlarmStore {
                 set(Calendar.MILLISECOND, 0)
             }
             val dayBit = 1 shl (candidate.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY)
-            if (alarm.daysMask and dayBit != 0 && candidate.timeInMillis > now.timeInMillis) {
+            val dayMatches = alarm.daysMask == 0 || alarm.daysMask and dayBit != 0
+            if (dayMatches && candidate.timeInMillis > now.timeInMillis) {
                 return candidate.timeInMillis
             }
         }

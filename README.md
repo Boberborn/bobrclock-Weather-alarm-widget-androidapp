@@ -26,7 +26,7 @@ All sizes: `maxHeight ≥ 65 dp → hourly shown`, `compact = false`.
 - Weather runs briefly on a user-selected 10-minute to 12-hour interval using `JobScheduler`; the default is one hour.
 - No ads, analytics, trackers, or third-party runtime libraries.
 - The time/day/song editor appears only after **Add alarm** or **Edit**.
-- Multiple alarms support selected weekdays and a separate user-selected song.
+- Multiple alarms support selected weekdays and a separate user-selected song. No selected days means a one-time alarm that rings once and turns itself off.
 - Alarms use `AlarmManager.setAlarmClock`, a foreground media-playback service, a full-screen ringing activity with Stop and 5-minute Snooze, vibration, and boot rescheduling.
 - Minimum Android 8.0; target Android 16.
 
@@ -34,13 +34,13 @@ All sizes: `maxHeight ≥ 65 dp → hourly shown`, `compact = false`.
 
 - **Clock tab** – large clock, current weather card (up/down arrows for high/low temp), month calendar, alarm list.
 - **Weather tab** – daily details with hourly temperature graph, UV index, wind speed, sunrise/sunset.
-- **Alarms tab** – add/edit/delete alarms, per-day scheduling, custom alarm sounds. (Planned: merge into Clock tab.)
+- **Alarms** – merged into the Clock tab: add/edit/delete alarms, per-day scheduling, custom alarm sounds.
 - **Widget editor** – per-width config for clock/date/temp text sizes, icon size, UV, location, hourly forecast toggle; **Save/Load backup** buttons.
 - **Hourly forecast** – shows the next 2–5 hours depending on widget width; rolls over past midnight correctly.
 - **Alarm icon** – alarm clock icon + times shown under the date on the widget.
 - **Alarm in silent mode** – option to raise volume and play alarm even when the phone is in silent/DND mode.
 - **12/24h time format** – follows system setting by default, with optional override in settings.
-- **Widget tap** – tap top-left to open app on Weather tab; top-right or elsewhere refreshes weather.
+- **Widget tap** – tap anywhere on the widget to open the app on the Clock tab.
 - **Settings backup** – Save/Load backup, Reset to defaults.
 
 ## Expected memory
@@ -71,9 +71,12 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 
 ## Planned
 
-- **Multilingual** – follow Android system language with optional override.
-- Merge Alarms tab into Clock tab.
-- **Autoclear log** lines older than 3 days.
+- **Multilingual** – follow Android system language with optional override. (First pass done: `values/strings.xml` + `values-cs/strings.xml`, main screens; remaining: weather detail cards, condition names, day labels, alarm/widget editor.)
+- Merge Alarms tab into Clock tab. (Done.)
+- **Autoclear log** lines older than 3 days. (Done: pruned in `AlarmLog.log()` and `AlarmLog.entries()`.)
+- **Widget tap opens Clock tab** – widget tap opens the app on the Clock tab instead of the Weather tab. (Done: `tab` extra = `"clock"`.)
+- **Widget weather vanishes at ~23:xx** – fixed: `WeatherJobService` built `nowHour` with seconds still set (`"23:00:15.123"`), so the lexicographic window scan skipped every entry and stored an empty hourly list at 23:xx; it now zeros seconds/nanos.
+- **One-time alarm when no day selected** – done: deselecting all days saves `daysMask = 0`, which schedules the next occurrence, rings once, then auto-disables; the alarm row shows "Once".
 
 ## Alarm reliability checklist
 

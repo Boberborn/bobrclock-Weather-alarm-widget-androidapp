@@ -55,7 +55,7 @@ class ClockWeatherWidget : AppWidgetProvider() {
         if (intent.action == ACTION_TAP) {
             val open = Intent(context, InstructionActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .putExtra("tab", "weather")
+                .putExtra("tab", "clock")
             context.startActivity(open)
         }
     }

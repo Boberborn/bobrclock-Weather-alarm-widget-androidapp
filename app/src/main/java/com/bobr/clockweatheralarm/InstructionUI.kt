@@ -614,7 +614,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 onRefresh = {
                                     weatherNeedsRefresh = true
                                     WeatherScheduler.refreshNow(context)
-                                    toast(context, "Refreshing weather…")
+                                    toast(context, context.getString(R.string.refreshing_weather))
                                 },
                             )
                             Spacer(Modifier.height(16.dp))
@@ -625,7 +625,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                 onRefreshNow = {
                                     weatherNeedsRefresh = true
                                     WeatherScheduler.refreshNow(context)
-                                    toast(context, "Refreshing weather…")
+                                    toast(context, context.getString(R.string.refreshing_weather))
                                 },
                                 onWeatherStateReload = {
                                     weather = loadWeatherUi(context)
@@ -656,14 +656,14 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text(
-                                        text = "Thanks for using Bobr Clock!",
+                                        text = LocalContext.current.getString(R.string.thanks_message),
                                         fontSize = 20.sp,
                                         color = OlivePrimary,
                                         fontFamily = FontFamily.Cursive,
                                     )
                                     Spacer(Modifier.height(6.dp))
                                     Text(
-                                        text = "If you find it useful, consider a small donation.",
+                                        text = LocalContext.current.getString(R.string.donate_prompt),
                                         fontSize = 14.sp,
                                         color = TextMuted,
                                         fontFamily = FontFamily.Cursive,
@@ -682,7 +682,7 @@ fun InstructionUI(modifier: Modifier = Modifier) {
                                             contentColor = PaperWarmTint,
                                         ),
                                     ) {
-                                        Text("Donate", fontFamily = FontFamily.Cursive)
+                                        Text(LocalContext.current.getString(R.string.donate), fontFamily = FontFamily.Cursive)
                                     }
                                 }
                             }
@@ -1202,6 +1202,7 @@ private fun windCompass(deg: Int): String {
 }
 
 private fun daysLabel(mask: Int): String {
+    if (mask == 0) return "Once"
     if (mask == AlarmStore.ALL_DAYS) return "Every day"
     val days = listOf(
         "Mon" to Calendar.MONDAY,
@@ -2087,8 +2088,8 @@ private fun CurrentWeatherCardEnhanced(
                     Text(temperature, fontSize = 58.sp, color = OlivePrimary, fontFamily = FontFamily.Cursive, fontWeight = FontWeight.Normal, maxLines = 1)
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text("H: $high", fontSize = 17.sp, color = WarmOrange, fontFamily = FontFamily.Cursive)
-                        Text("L: $low", fontSize = 17.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
+                        Text(LocalContext.current.getString(R.string.high_label, high), fontSize = 17.sp, color = WarmOrange, fontFamily = FontFamily.Cursive)
+                        Text(LocalContext.current.getString(R.string.low_label, low), fontSize = 17.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2104,19 +2105,19 @@ private fun CurrentWeatherCardEnhanced(
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Feels like", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(LocalContext.current.getString(R.string.feels_like), fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
                 Text(feelsLike, fontSize = 18.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(DividerBeige))
             if (precipProb >= 0) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Rain", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                    Text(LocalContext.current.getString(R.string.rain), fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
                     Text("$precipProb%", fontSize = 18.sp, color = RainBlue, fontFamily = FontFamily.Cursive)
                 }
                 Box(Modifier.width(1.dp).fillMaxHeight().background(DividerBeige))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Wind", fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
+                Text(LocalContext.current.getString(R.string.wind), fontSize = 12.sp, color = TextMuted, fontFamily = FontFamily.Cursive)
                 Text(wind, fontSize = 18.sp, color = TextBrown, fontFamily = FontFamily.Cursive)
             }
         }
@@ -2133,7 +2134,7 @@ private fun HourlyDayPager(
     if (days.isEmpty()) return
     Column {
         Text(
-            "HOURLY FORECAST",
+            LocalContext.current.getString(R.string.hourly_forecast),
             fontSize = 18.sp,
             color = OliveDark,
             fontFamily = FontFamily.Cursive,
@@ -2225,7 +2226,7 @@ private fun DailyForecastSection(
 ) {
     Column {
         Text(
-            "DAILY FORECAST",
+            LocalContext.current.getString(R.string.daily_forecast),
             fontSize = 18.sp,
             color = OliveDark,
             fontFamily = FontFamily.Cursive,
@@ -2635,6 +2636,7 @@ private fun ForecastDayCell(day: ForecastUiModel) {
 
 @Composable
 private fun AlarmsHeader(onAdd: () -> Unit) {
+    val ctx = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2644,7 +2646,7 @@ private fun AlarmsHeader(onAdd: () -> Unit) {
         AlarmClockIcon(Modifier.size(22.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Alarms",
+            text = LocalContext.current.getString(R.string.alarms_title),
             fontSize = 24.sp,
             color = OliveDark,
             fontFamily = FontFamily.Cursive,
@@ -2654,7 +2656,7 @@ private fun AlarmsHeader(onAdd: () -> Unit) {
             modifier = Modifier
                 .size(48.dp)
                 .olivePress(onAdd)
-                .semantics { contentDescription = "Add alarm" },
+                .semantics { contentDescription = ctx.getString(R.string.add_alarm) },
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -2751,7 +2753,7 @@ private fun AlarmsList(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "No alarms yet. Tap + to add one.",
+                text = LocalContext.current.getString(R.string.no_alarms),
                 fontSize = 16.sp,
                 color = TextMuted,
                 fontFamily = FontFamily.Cursive,
@@ -2898,6 +2900,7 @@ private fun BottomNavigationBar(
                 }
             },
     ) {
+        val ctx = LocalContext.current
         InstructionTab.entries.forEach { tab ->
             val isSelected = tab == selectedTab
             Box(
@@ -2914,7 +2917,7 @@ private fun BottomNavigationBar(
                     )
                     .semantics {
                         selected = isSelected
-                        contentDescription = tab.name
+                        contentDescription = tabLabel(ctx, tab)
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -2925,7 +2928,7 @@ private fun BottomNavigationBar(
                     TabIcon(tab, isSelected, Modifier.size(26.dp))
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = tab.name,
+                        text = tabLabel(ctx, tab),
                         fontSize = 13.sp,
                         color = if (isSelected) OlivePrimary else TextBrown,
                         fontFamily = FontFamily.Cursive,
@@ -2935,6 +2938,16 @@ private fun BottomNavigationBar(
         }
     }
 }
+
+private fun tabLabel(context: Context, tab: InstructionTab): String = context.getString(
+    when (tab) {
+        InstructionTab.Clock -> R.string.tab_clock
+        InstructionTab.Weather -> R.string.tab_weather
+        InstructionTab.Widget -> R.string.tab_widget
+        InstructionTab.Settings -> R.string.tab_settings
+        InstructionTab.More -> R.string.tab_more
+    },
+)
 
 @Composable
 private fun TabIcon(tab: InstructionTab, selected: Boolean, modifier: Modifier = Modifier) {
@@ -3680,7 +3693,7 @@ private fun MoreTabContent(
 
     Spacer(Modifier.height(8.dp))
     Text(
-        text = "Settings",
+        text = LocalContext.current.getString(R.string.tab_settings),
         fontSize = 24.sp,
         color = OliveDark,
         fontFamily = FontFamily.Cursive,
@@ -3709,7 +3722,7 @@ private fun MoreTabContent(
                     contentColor = PaperWarmTint,
                 ),
             ) {
-                Text("Refresh", fontFamily = FontFamily.Cursive)
+                Text(LocalContext.current.getString(R.string.refresh), fontFamily = FontFamily.Cursive)
             }
         }
     }
@@ -3717,14 +3730,14 @@ private fun MoreTabContent(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(
-                text = "Weather location",
+                text = LocalContext.current.getString(R.string.weather_location_title),
                 fontSize = 17.sp,
                 color = TextBrown,
                 fontFamily = FontFamily.Cursive,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "City used for the forecast.",
+                text = LocalContext.current.getString(R.string.weather_location_hint),
                 fontSize = 14.sp,
                 color = TextMuted,
                 fontFamily = FontFamily.Cursive,
@@ -3748,7 +3761,7 @@ private fun MoreTabContent(
                 OutlinedTextField(
                     value = locationQuery,
                     onValueChange = { locationQuery = it; showDropdown = true },
-                    label = { Text("City") },
+                    label = { Text(LocalContext.current.getString(R.string.city)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3802,7 +3815,7 @@ private fun MoreTabContent(
                         contentColor = PaperWarmTint,
                     ),
                 ) {
-                    Text("Use GPS", fontFamily = FontFamily.Cursive)
+                    Text(LocalContext.current.getString(R.string.use_gps), fontFamily = FontFamily.Cursive)
                 }
             }
         }
@@ -3812,19 +3825,19 @@ private fun MoreTabContent(
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Temperature unit",
-                        fontSize = 17.sp,
-                        color = TextBrown,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Show temperatures in °C or °F.",
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                        fontFamily = FontFamily.Cursive,
-                    )
+                Text(
+                    text = LocalContext.current.getString(R.string.temp_unit_title),
+                    fontSize = 17.sp,
+                    color = TextBrown,
+                    fontFamily = FontFamily.Cursive,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = LocalContext.current.getString(R.string.temp_unit_hint),
+                    fontSize = 14.sp,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Cursive,
+                )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -3835,7 +3848,7 @@ private fun MoreTabContent(
                             ClockWeatherWidget.updateAll(context)
                             reloadWeather()
                         },
-                        label = { Text("°C") },
+                        label = { Text(LocalContext.current.getString(R.string.celsius)) },
                     )
                     FilterChip(
                         selected = tempIsFahrenheit,
@@ -3845,7 +3858,7 @@ private fun MoreTabContent(
                             ClockWeatherWidget.updateAll(context)
                             reloadWeather()
                         },
-                        label = { Text("°F") },
+                        label = { Text(LocalContext.current.getString(R.string.fahrenheit)) },
                     )
                 }
             }
@@ -3855,14 +3868,14 @@ private fun MoreTabContent(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(
-                text = "Time format",
+                text = LocalContext.current.getString(R.string.time_format_title),
                 fontSize = 17.sp,
                 color = TextBrown,
                 fontFamily = FontFamily.Cursive,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "System uses the phone's 12/24h setting by default.",
+                text = LocalContext.current.getString(R.string.time_format_hint),
                 fontSize = 14.sp,
                 color = TextMuted,
                 fontFamily = FontFamily.Cursive,
@@ -3877,7 +3890,7 @@ private fun MoreTabContent(
                         prefs.edit().putString(Prefs.TIME_FORMAT, "system").apply()
                         ClockWeatherWidget.updateAll(context)
                     },
-                    label = { Text("System") },
+                    label = { Text(LocalContext.current.getString(R.string.fmt_system)) },
                 )
                 FilterChip(
                     selected = timeFormat.value == "12",
@@ -3886,7 +3899,7 @@ private fun MoreTabContent(
                         prefs.edit().putString(Prefs.TIME_FORMAT, "12").apply()
                         ClockWeatherWidget.updateAll(context)
                     },
-                    label = { Text("12h") },
+                    label = { Text(LocalContext.current.getString(R.string.fmt_12h)) },
                 )
                 FilterChip(
                     selected = timeFormat.value == "24",
@@ -3895,7 +3908,7 @@ private fun MoreTabContent(
                         prefs.edit().putString(Prefs.TIME_FORMAT, "24").apply()
                         ClockWeatherWidget.updateAll(context)
                     },
-                    label = { Text("24h") },
+                    label = { Text(LocalContext.current.getString(R.string.fmt_24h)) },
                 )
             }
         }
@@ -3906,19 +3919,19 @@ private fun MoreTabContent(
             val ignoreSilent = remember { mutableStateOf(Prefs.alarmIgnoresSilentMode(context)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Play alarm in silent mode",
-                        fontSize = 17.sp,
-                        color = TextBrown,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Raise the alarm volume when ringing, even if the phone is silent or in DND.",
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                        fontFamily = FontFamily.Cursive,
-                    )
+                Text(
+                    text = LocalContext.current.getString(R.string.play_silent_title),
+                    fontSize = 17.sp,
+                    color = TextBrown,
+                    fontFamily = FontFamily.Cursive,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = LocalContext.current.getString(R.string.play_silent_hint),
+                    fontSize = 14.sp,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Cursive,
+                )
                 }
                 CustomSwitch(
                     checked = ignoreSilent.value,
@@ -3935,19 +3948,19 @@ private fun MoreTabContent(
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Show alarms on widget",
-                        fontSize = 17.sp,
-                        color = TextBrown,
-                        fontFamily = FontFamily.Cursive,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "The home-screen widget lists your next alarms.",
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                        fontFamily = FontFamily.Cursive,
-                    )
+                Text(
+                    text = LocalContext.current.getString(R.string.show_alarms_title),
+                    fontSize = 17.sp,
+                    color = TextBrown,
+                    fontFamily = FontFamily.Cursive,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = LocalContext.current.getString(R.string.show_alarms_hint),
+                    fontSize = 14.sp,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Cursive,
+                )
                 }
                 CustomSwitch(
                     checked = widgetShowAlarms,
@@ -3964,7 +3977,7 @@ private fun MoreTabContent(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(
-                text = "Permissions",
+                text = LocalContext.current.getString(R.string.permissions),
                 fontSize = 17.sp,
                 color = TextBrown,
                 fontFamily = FontFamily.Cursive,
@@ -4732,13 +4745,12 @@ private fun AlarmEditorDialog(
                 }
                 TextButton(
                     onClick = {
-                    val days = if (daysMask == 0) AlarmStore.ALL_DAYS else daysMask
                     val saved = SavedAlarm(
                         id = existing?.id ?: AlarmStore.nextId(context),
                         hour = timeState.hour,
                         minute = timeState.minute,
                         enabled = enabled,
-                        daysMask = days,
+                        daysMask = daysMask,
                         soundUri = soundUri,
                         soundName = soundName,
                     )

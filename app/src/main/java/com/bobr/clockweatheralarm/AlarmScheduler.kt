@@ -21,7 +21,7 @@ object AlarmScheduler {
             AlarmLog.log(context, "reschedule skipped: exact alarm permission missing")
             return false
         }
-        val enabled = AlarmStore.load(context).filter { it.enabled && it.daysMask != 0 }
+        val enabled = AlarmStore.load(context).filter { it.enabled }
         AlarmLog.log(context, "reschedule: ${enabled.size} enabled alarm(s)")
         val result = enabled.all { schedule(context, it) }
         ClockWeatherWidget.updateAll(context)
@@ -30,7 +30,7 @@ object AlarmScheduler {
     }
 
     fun ensureScheduled(context: Context): Boolean {
-        val enabled = AlarmStore.load(context).filter { it.enabled && it.daysMask != 0 }
+        val enabled = AlarmStore.load(context).filter { it.enabled }
         if (enabled.isEmpty()) return true
         val missing = enabled.any { a ->
             PendingIntent.getBroadcast(
@@ -45,7 +45,7 @@ object AlarmScheduler {
 
     fun scheduleById(context: Context, id: Int): Boolean {
         val alarm = AlarmStore.find(context, id) ?: return false
-        if (!alarm.enabled || alarm.daysMask == 0) return false
+        if (!alarm.enabled) return false
         return schedule(context, alarm)
     }
 

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bobr Clock</string>
+    <string name="alarm_channel">Budík</string>
+    <string name="alarm_channel_description">Spolehlivé přehrávání budíku</string>
+    <string name="alarm_ringing">Budík</string>
+    <string name="stop_alarm">Zastavit budík</string>
+    <string name="snooze_five_minutes">Odložit o 5 minut</string>
+    <string name="exact_alarm_required">Povolte přesné budíky a uložte znovu.</string>
+    <string name="alarm_widget_time">Budík</string>
+    <string name="alarm_widget_off">Žádný budík</string>
+    <string name="weather_waiting">--°</string>
+    <string name="set_location">Nastavit polohu</string>
+    <string name="widget_description">Hodiny, datum, aktuální počasí a stav budíku</string>
+
+    <string name="tab_clock">Hodiny</string>
+    <string name="tab_weather">Počasí</string>
+    <string name="tab_widget">Widget</string>
+    <string name="tab_settings">Nastavení</string>
+    <string name="tab_more">Více</string>
+
+    <string name="thanks_message">Děkujeme za používání Bobr Clock!</string>
+    <string name="donate_prompt">Pokud vám aplikace přijde užitečná, zvažte malý příspěvek.</string>
+    <string name="donate">Přispět</string>
+
+    <string name="weather_location_title">Poloha počasí</string>
+    <string name="weather_location_hint">Město použité pro předpověď.</string>
+    <string name="city">Město</string>
+    <string name="use_gps">Použít GPS</string>
+    <string name="temp_unit_title">Jednotka teploty</string>
+    <string name="temp_unit_hint">Zobrazovat teploty ve °C nebo °F.</string>
+    <string name="celsius">°C</string>
+    <string name="fahrenheit">°F</string>
+
+    <string name="refresh">Obnovit</string>
+    <string name="refreshing_weather">Obnovuji počasí…</string>
+    <string name="feels_like">Pocitově</string>
+    <string name="rain">Srážky</string>
+    <string name="wind">Vítr</string>
+    <string name="high_label">Max: %s</string>
+    <string name="low_label">Min: %s</string>
+    <string name="hourly_forecast">HODINOVÁ PŘEDPOVĚĎ</string>
+    <string name="daily_forecast">DENNÍ PŘEDPOVĚĎ</string>
+
+    <string name="alarms_title">Budíky</string>
+    <string name="add_alarm">Přidat budík</string>
+    <string name="no_alarms">Zatím žádné budíky. Klepněte na + pro přidání.</string>
+
+    <string name="time_format_title">Formát času</string>
+    <string name="time_format_hint">Systém použije 12/24h nastavení telefonu.</string>
+    <string name="fmt_system">Systém</string>
+    <string name="fmt_12h">12h</string>
+    <string name="fmt_24h">24h</string>
+
+    <string name="play_silent_title">Přehrát budík v tichém režimu</string>
+    <string name="play_silent_hint">Zvýšit hlasitost budíku i při tichém režimu nebo Nerušit.</string>
+    <string name="show_alarms_title">Zobrazovat budíky na widgetu</string>
+    <string name="show_alarms_hint">Widget na domovské obrazovce zobrazuje další budíky.</string>
+    <string name="permissions">Oprávnění</string>
+</resources>

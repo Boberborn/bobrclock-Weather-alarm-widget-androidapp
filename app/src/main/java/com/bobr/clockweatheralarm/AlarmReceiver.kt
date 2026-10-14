@@ -9,7 +9,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val isTest = intent.getBooleanExtra(AlarmScheduler.EXTRA_TEST, false)
         val alarmId = intent.getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, -1)
         val alarm = if (isTest) null else AlarmStore.find(context, alarmId)
-        if (!isTest && (alarm == null || !alarm.enabled || alarm.daysMask == 0)) {
+        if (!isTest && (alarm == null || !alarm.enabled)) {
             AlarmLog.log(
                 context,
                 "alarm #$alarmId triggered but skipped (not found / disabled)",
@@ -17,6 +17,11 @@ class AlarmReceiver : BroadcastReceiver() {
             return
         }
         AlarmLog.log(context, if (isTest) "test alarm fired" else "alarm #$alarmId fired")
+
+        if (!isTest && alarm != null && alarm.daysMask == 0) {
+            AlarmStore.save(context, alarm.copy(enabled = false))
+            AlarmLog.log(context, "one-time alarm #$alarmId completed, now disabled")
+        }
 
         val service = Intent(context, AlarmService::class.java)
             .setAction(AlarmService.ACTION_START)

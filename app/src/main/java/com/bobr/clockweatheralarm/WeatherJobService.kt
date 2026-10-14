@@ -76,7 +76,8 @@ class WeatherJobService : JobService() {
 
             val hourlyOut = StringBuilder()
             val hourlyAllOut = StringBuilder()
-            val nowHour = java.time.LocalTime.now().withMinute(0).toString()
+            val nowHour = java.time.LocalTime.now()
+                .withMinute(0).withSecond(0).withNano(0).toString()
             var startIdx = 0
             while (startIdx < hTimes.length() &&
                 hTimes.getString(startIdx).substring(11, 16) < nowHour
